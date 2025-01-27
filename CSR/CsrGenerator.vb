@@ -1,7 +1,4 @@
 ﻿Imports System.Collections.Generic
-Imports System.Data.SqlClient
-Imports System.IO
-Imports System.Text.Json
 Imports System.Windows.Forms
 Imports CSR.CSR.Api
 
@@ -99,6 +96,17 @@ Public Class CsrGenerator
         cboInvoiceType.DisplayMember = "Key" ' Display the item names
         cboInvoiceType.ValueMember = "Value" ' Store the values
 
+        rdoDeveloper.Checked = True
+        txtOTP.Text = "123456"
+        txtUserId.Text = "sajaya"
+        txtCompanyId.Text = "5"
+        txtOrganizationIdentifier.Text = "333333333333333"
+        txtOrganizationUnitName.Text = "Matrix"
+        txtOrganizationName.Text = "Matrix Co."
+        txtCountryName.Text = "SA"
+        txtLocation.Text = "Riyadh"
+        txtIndustry.Text = "IT"
+        txtEmailAdress.Text = "sajaya@matrix.com"
     End Sub
     Private Sub cboInvoiceType_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cboInvoiceType.SelectedIndexChanged
         ' Check if an item is selected

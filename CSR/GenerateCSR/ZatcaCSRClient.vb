@@ -1,18 +1,17 @@
-﻿Imports System
+﻿Imports System.Collections.Generic
 Imports System.Diagnostics
 Imports System.IO
 Imports System.Linq
+Imports System.Net.Http
+Imports System.Net.Http.Headers
 Imports System.Text
 Imports System.Text.Json
 Imports System.Text.RegularExpressions
 Imports System.Threading.Tasks
-Imports System.Net.Http
-Imports System.Collections.Generic
-Imports System.Xml.Linq
-Imports SDKNETFrameWorkLib.BLL
-Imports System.Net.Http.Headers
-Imports java.util
 Imports System.Xml
+Imports System.Xml.Linq
+Imports java.util
+Imports SDKNETFrameWorkLib.BLL
 
 Namespace CSR.Api
     Public Class ZatcaCSRClient
