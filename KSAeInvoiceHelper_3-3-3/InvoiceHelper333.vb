@@ -129,7 +129,7 @@ Public Class InvoiceHelper333
 
                     ' Perform clearance API call
                     '***BFY*** Comment out the following line during testing to prevent sending the invoice to ZATCA.
-                    apiResponse = Await PerformClearanceApiCall(httpClient, userAndSecret, signedBase64Xml, invoiceHash, uuid)
+                    'apiResponse = Await PerformClearanceApiCall(httpClient, userAndSecret, signedBase64Xml, invoiceHash, uuid)
 
                     If apiResponse.statusCode = 200 OrElse apiResponse.statusCode = 202 Then
                         clearedInvoice = apiResponse.clearedInvoice
@@ -211,7 +211,7 @@ Public Class InvoiceHelper333
             }
                 ' Perform the API call and await its response
                 '***BFY*** Comment out the following line during testing to prevent sending the invoice to ZATCA.
-                response = Await PerformReportingApiCall(httpClient, userAndSecret, invoiceData.SignedInvoice, invoiceData.InvoiceHash, invoiceData.UUID)
+                'response = Await PerformReportingApiCall(httpClient, userAndSecret, invoiceData.SignedInvoice, invoiceData.InvoiceHash, invoiceData.UUID)
 
                 ' Check the response status code to determine the next action
                 If response.statusCode = 200 OrElse response.statusCode = 202 Then

@@ -5,6 +5,7 @@ Imports CSR.CSR.Api
 Public Class CsrGenerator
     Private Async Sub btnGenerateCSR_Click(sender As Object, e As EventArgs) Handles btnGenerateCSR.Click
 
+        txtSQL.Text = ""
 
         If String.IsNullOrEmpty(txtEmailAdress.Text) OrElse
          String.IsNullOrEmpty(txtCompanyId.Text) OrElse
@@ -17,7 +18,6 @@ Public Class CsrGenerator
             MessageBox.Show("Please fill all fields", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Return
         End If
-
 
         ''Create a New instance of ZatcaCSRClient
         Dim csrClient As New ZatcaCSRClient()
@@ -39,7 +39,6 @@ Public Class CsrGenerator
             .UseDeveloperPortalEndpoint = rdoDeveloper.Checked
         }
 
-
         'Dim input As New CsrInput() With
         '{
         '    .EmailAddress = "iyad@sajaya.com",
@@ -59,7 +58,6 @@ Public Class CsrGenerator
         ' Call the method and await the response
         Dim response = Await csrClient.GenerateCSRAndGetComplianceAsync(input)
         response.CompanyId = txtCompanyId.Text
-
 
         ' Print the results
         If response.Success Then
@@ -82,6 +80,7 @@ Public Class CsrGenerator
         Dim GuidForSerial = Guid.NewGuid.ToString
         txtSerialNumber.Text = "1-" & OrganizationName & "|2-" & OrganizationName & "|3-" & GuidForSerial & ""
     End Sub
+
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         ' Create a list of KeyValuePairs to store items and their corresponding values
         ' Add items with values to the list
@@ -96,6 +95,7 @@ Public Class CsrGenerator
         cboInvoiceType.DisplayMember = "Key" ' Display the item names
         cboInvoiceType.ValueMember = "Value" ' Store the values
 
+        'rdoProduction.Checked = True
         rdoDeveloper.Checked = True
         txtOTP.Text = "123456"
         txtUserId.Text = "sajaya"
@@ -106,8 +106,9 @@ Public Class CsrGenerator
         txtCountryName.Text = "SA"
         txtLocation.Text = "Riyadh"
         txtIndustry.Text = "IT"
-        txtEmailAdress.Text = "sajaya@matrix.com"
+        txtEmailAdress.Text = "iyad@sajaya.com"
     End Sub
+
     Private Sub cboInvoiceType_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cboInvoiceType.SelectedIndexChanged
         ' Check if an item is selected
         If cboInvoiceType.SelectedIndex >= 0 Then
@@ -134,6 +135,7 @@ Public Class CsrGenerator
     Private Sub txtOrganizationIdentifier_TextChanged(sender As Object, e As EventArgs) Handles txtOrganizationIdentifier.TextChanged
         txtCommonName.Text = "" & txtOrganizationName.Text & "-" & txtOrganizationIdentifier.Text & ""
     End Sub
+
     Private Function PrepareInsertSql(CompanyID As Integer, Secret As String, BinarySecret As String, CSR As String, PrivateKey As String, PublicKey As String) As String
         Dim sql As String = "INSERT INTO [tdCommon].[dbo].[KSAElectronicInvoicing] " &
                             "([CompanyID], [UserId], [Secret], [BinarySecret], [CSR], [PrivateKey], [PublicKey]) " &
@@ -141,6 +143,4 @@ Public Class CsrGenerator
 
         Return String.Format(sql, CompanyID, txtUserId.Text, Secret, BinarySecret, CSR, PrivateKey, PublicKey)
     End Function
-
-
 End Class
