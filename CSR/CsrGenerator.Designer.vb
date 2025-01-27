@@ -59,10 +59,10 @@ Partial Class CsrGenerator
         'btnGenerateCSR
         '
         Me.btnGenerateCSR.Location = New System.Drawing.Point(329, 405)
-        Me.btnGenerateCSR.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.btnGenerateCSR.Margin = New System.Windows.Forms.Padding(4)
         Me.btnGenerateCSR.Name = "btnGenerateCSR"
         Me.btnGenerateCSR.Size = New System.Drawing.Size(157, 28)
-        Me.btnGenerateCSR.TabIndex = 31
+        Me.btnGenerateCSR.TabIndex = 13
         Me.btnGenerateCSR.Text = "Generate CSR"
         Me.btnGenerateCSR.UseVisualStyleBackColor = True
         '
@@ -179,15 +179,15 @@ Partial Class CsrGenerator
         'txtCountryName
         '
         Me.txtCountryName.Location = New System.Drawing.Point(231, 245)
-        Me.txtCountryName.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtCountryName.Margin = New System.Windows.Forms.Padding(4)
         Me.txtCountryName.Name = "txtCountryName"
         Me.txtCountryName.Size = New System.Drawing.Size(359, 22)
-        Me.txtCountryName.TabIndex = 12
+        Me.txtCountryName.TabIndex = 8
         '
         'txtIndustry
         '
         Me.txtIndustry.Location = New System.Drawing.Point(231, 341)
-        Me.txtIndustry.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtIndustry.Margin = New System.Windows.Forms.Padding(4)
         Me.txtIndustry.Name = "txtIndustry"
         Me.txtIndustry.Size = New System.Drawing.Size(359, 22)
         Me.txtIndustry.TabIndex = 11
@@ -195,40 +195,41 @@ Partial Class CsrGenerator
         'txtOrganizationName
         '
         Me.txtOrganizationName.Location = New System.Drawing.Point(231, 213)
-        Me.txtOrganizationName.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtOrganizationName.Margin = New System.Windows.Forms.Padding(4)
         Me.txtOrganizationName.Name = "txtOrganizationName"
         Me.txtOrganizationName.Size = New System.Drawing.Size(359, 22)
-        Me.txtOrganizationName.TabIndex = 10
+        Me.txtOrganizationName.TabIndex = 7
         '
         'txtSQL
         '
         Me.txtSQL.Location = New System.Drawing.Point(19, 441)
-        Me.txtSQL.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtSQL.Margin = New System.Windows.Forms.Padding(4)
         Me.txtSQL.Multiline = True
         Me.txtSQL.Name = "txtSQL"
+        Me.txtSQL.ScrollBars = System.Windows.Forms.ScrollBars.Vertical
         Me.txtSQL.Size = New System.Drawing.Size(571, 238)
-        Me.txtSQL.TabIndex = 9
+        Me.txtSQL.TabIndex = 14
         '
         'txtOrganizationIdentifier
         '
         Me.txtOrganizationIdentifier.Location = New System.Drawing.Point(231, 149)
-        Me.txtOrganizationIdentifier.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtOrganizationIdentifier.Margin = New System.Windows.Forms.Padding(4)
         Me.txtOrganizationIdentifier.Name = "txtOrganizationIdentifier"
         Me.txtOrganizationIdentifier.Size = New System.Drawing.Size(359, 22)
-        Me.txtOrganizationIdentifier.TabIndex = 8
+        Me.txtOrganizationIdentifier.TabIndex = 5
         '
         'txtLocation
         '
         Me.txtLocation.Location = New System.Drawing.Point(231, 309)
-        Me.txtLocation.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtLocation.Margin = New System.Windows.Forms.Padding(4)
         Me.txtLocation.Name = "txtLocation"
         Me.txtLocation.Size = New System.Drawing.Size(359, 22)
-        Me.txtLocation.TabIndex = 7
+        Me.txtLocation.TabIndex = 10
         '
         'txtOrganizationUnitName
         '
         Me.txtOrganizationUnitName.Location = New System.Drawing.Point(231, 181)
-        Me.txtOrganizationUnitName.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtOrganizationUnitName.Margin = New System.Windows.Forms.Padding(4)
         Me.txtOrganizationUnitName.Name = "txtOrganizationUnitName"
         Me.txtOrganizationUnitName.Size = New System.Drawing.Size(359, 22)
         Me.txtOrganizationUnitName.TabIndex = 6
@@ -237,46 +238,46 @@ Partial Class CsrGenerator
         '
         Me.txtSerialNumber.Enabled = False
         Me.txtSerialNumber.Location = New System.Drawing.Point(231, 117)
-        Me.txtSerialNumber.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtSerialNumber.Margin = New System.Windows.Forms.Padding(4)
         Me.txtSerialNumber.Name = "txtSerialNumber"
         Me.txtSerialNumber.Size = New System.Drawing.Size(359, 22)
-        Me.txtSerialNumber.TabIndex = 4
+        Me.txtSerialNumber.TabIndex = 0
         '
         'txtCommonName
         '
         Me.txtCommonName.Enabled = False
         Me.txtCommonName.Location = New System.Drawing.Point(231, 89)
-        Me.txtCommonName.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtCommonName.Margin = New System.Windows.Forms.Padding(4)
         Me.txtCommonName.Name = "txtCommonName"
         Me.txtCommonName.Size = New System.Drawing.Size(359, 22)
-        Me.txtCommonName.TabIndex = 16
+        Me.txtCommonName.TabIndex = 0
         '
         'txtOTP
         '
         Me.txtOTP.Location = New System.Drawing.Point(457, 5)
-        Me.txtOTP.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtOTP.Margin = New System.Windows.Forms.Padding(4)
         Me.txtOTP.Name = "txtOTP"
         Me.txtOTP.Size = New System.Drawing.Size(132, 22)
-        Me.txtOTP.TabIndex = 3
+        Me.txtOTP.TabIndex = 2
         '
         'cboInvoiceType
         '
         Me.cboInvoiceType.FormattingEnabled = True
         Me.cboInvoiceType.Location = New System.Drawing.Point(231, 277)
-        Me.cboInvoiceType.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.cboInvoiceType.Margin = New System.Windows.Forms.Padding(4)
         Me.cboInvoiceType.Name = "cboInvoiceType"
         Me.cboInvoiceType.Size = New System.Drawing.Size(359, 24)
-        Me.cboInvoiceType.TabIndex = 32
+        Me.cboInvoiceType.TabIndex = 9
         '
         'rdoProduction
         '
         Me.rdoProduction.AutoSize = True
         Me.rdoProduction.Checked = True
         Me.rdoProduction.Location = New System.Drawing.Point(21, 6)
-        Me.rdoProduction.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.rdoProduction.Margin = New System.Windows.Forms.Padding(4)
         Me.rdoProduction.Name = "rdoProduction"
         Me.rdoProduction.Size = New System.Drawing.Size(92, 20)
-        Me.rdoProduction.TabIndex = 33
+        Me.rdoProduction.TabIndex = 0
         Me.rdoProduction.TabStop = True
         Me.rdoProduction.Text = "Production"
         Me.rdoProduction.UseVisualStyleBackColor = True
@@ -285,10 +286,10 @@ Partial Class CsrGenerator
         '
         Me.rdoDeveloper.AutoSize = True
         Me.rdoDeveloper.Location = New System.Drawing.Point(192, 4)
-        Me.rdoDeveloper.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.rdoDeveloper.Margin = New System.Windows.Forms.Padding(4)
         Me.rdoDeveloper.Name = "rdoDeveloper"
         Me.rdoDeveloper.Size = New System.Drawing.Size(92, 20)
-        Me.rdoDeveloper.TabIndex = 33
+        Me.rdoDeveloper.TabIndex = 1
         Me.rdoDeveloper.Text = "Developer"
         Me.rdoDeveloper.UseVisualStyleBackColor = True
         '
@@ -297,7 +298,7 @@ Partial Class CsrGenerator
         Me.Button1.BackgroundImage = Global.CSR.My.Resources.Resources.convert_icon
         Me.Button1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch
         Me.Button1.Location = New System.Drawing.Point(192, 114)
-        Me.Button1.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.Button1.Margin = New System.Windows.Forms.Padding(4)
         Me.Button1.Name = "Button1"
         Me.Button1.Size = New System.Drawing.Size(31, 28)
         Me.Button1.TabIndex = 34
@@ -306,10 +307,10 @@ Partial Class CsrGenerator
         'txtEmailAdress
         '
         Me.txtEmailAdress.Location = New System.Drawing.Point(231, 373)
-        Me.txtEmailAdress.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtEmailAdress.Margin = New System.Windows.Forms.Padding(4)
         Me.txtEmailAdress.Name = "txtEmailAdress"
         Me.txtEmailAdress.Size = New System.Drawing.Size(359, 22)
-        Me.txtEmailAdress.TabIndex = 11
+        Me.txtEmailAdress.TabIndex = 12
         '
         'Label15
         '
@@ -324,18 +325,18 @@ Partial Class CsrGenerator
         'txtCompanyId
         '
         Me.txtCompanyId.Location = New System.Drawing.Point(229, 59)
-        Me.txtCompanyId.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtCompanyId.Margin = New System.Windows.Forms.Padding(4)
         Me.txtCompanyId.Name = "txtCompanyId"
         Me.txtCompanyId.Size = New System.Drawing.Size(359, 22)
-        Me.txtCompanyId.TabIndex = 16
+        Me.txtCompanyId.TabIndex = 4
         '
         'txtUserId
         '
         Me.txtUserId.Location = New System.Drawing.Point(229, 31)
-        Me.txtUserId.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.txtUserId.Margin = New System.Windows.Forms.Padding(4)
         Me.txtUserId.Name = "txtUserId"
         Me.txtUserId.Size = New System.Drawing.Size(359, 22)
-        Me.txtUserId.TabIndex = 16
+        Me.txtUserId.TabIndex = 3
         '
         'Label7
         '
@@ -395,7 +396,7 @@ Partial Class CsrGenerator
         Me.Controls.Add(Me.txtCompanyId)
         Me.Controls.Add(Me.txtCommonName)
         Me.Controls.Add(Me.txtOTP)
-        Me.Margin = New System.Windows.Forms.Padding(4, 4, 4, 4)
+        Me.Margin = New System.Windows.Forms.Padding(4)
         Me.Name = "CsrGenerator"
         Me.Text = "Form1"
         Me.ResumeLayout(False)

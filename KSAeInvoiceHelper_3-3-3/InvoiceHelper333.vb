@@ -1931,15 +1931,16 @@ FROM     (SELECT CASE WHEN CatId <> 10 THEN 0 ELSE 2 END AS InvType, StrVoucherH
 
     Function GetItemInfoQuery() As String
         Return $"
-SELECT myID, UnitCode, InvoiceQty, LineExtensionAmount * ExchangePrice AS LineExtensionAmount, TaxAmount * ExchangePrice AS TaxAmount, RoundingAmount * ExchangePrice AS RoundingAmount, TaxCategoryPercent, ItemName, 
-                  PriceAmount * ExchangePrice AS PriceAmount, AlowanceChargeAmount * ExchangePrice AS AlowanceChargeAmount, ISNULL(TaxExemption, '') AS TaxExemption
-FROM     (SELECT myID, UnitCode, InvoiceQty, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
+SELECT myID, UnitCode,ItemName,  InvoiceQty,  PriceAmount * ExchangePrice AS PriceAmount , PriceAmount * InvoiceQty * ExchangePrice AS TotalPriceAmount , TotalRowDiscount  * ExchangePrice  As TotalRowDiscount , (PriceAmount * InvoiceQty * ExchangePrice ) - ( TotalRowDiscount  * ExchangePrice) As TotalPriceAmountAfterDiscount 
+,AlowanceChargeAmount-  (  TotalRowDiscount  * ExchangePrice )  As HeaderDisount ,  AlowanceChargeAmount * ExchangePrice AS AlowanceChargeAmount,   LineExtensionAmount * ExchangePrice AS LineExtensionAmount, TaxCategoryPercent,TaxAmount * ExchangePrice AS TaxAmount, RoundingAmount * ExchangePrice AS RoundingAmount,  
+                  ISNULL(TaxExemption, '') AS TaxExemption
+FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
                                     TaxExemption
-                  FROM      (SELECT myID, UnitCode, InvoiceQty, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, (ISNULL(InvoiceQty, 0) 
+                  FROM      (SELECT myID, UnitCode, InvoiceQty,ISNULL(DiscountValue, 0) As TotalRowDiscount , ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, (ISNULL(InvoiceQty, 0) 
                                                        * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0))) * ISNULL(TaxPerc, 0) AS TaxAmount, ISNULL(TaxPerc, 0) * 100 AS TaxCategoryPercent, ItemName, 
                                                        PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption
                                      FROM      (SELECT StrVoucherDetails_2.RowNo AS myID, ISNULL(ISNULL(StrUnits.UnitCodeE, StrUnits.UnitCodeA), 'PCE') AS UnitCode, StrVoucherDetails_2.Qty AS InvoiceQty, StrVoucherDetails_2.ItemDesc AS ItemName, 
-                                                                          StrVoucherDetails_2.Price AS PriceAmount, ISNULL(StrVoucherDetails_2.TotalDiscount, 0) AS DiscountValue, 
+                                                                        case when IsNull(MainRowNo,0) = 0 then  StrVoucherDetails_2.Price else StrVoucherDetails_2.KitItemPrice end AS PriceAmount, ISNULL(StrVoucherDetails_2.TotalDiscount, 0) AS DiscountValue, 
                                                                           CASE WHEN NetInvoice <> 0 THEN TotalPriceWithKitAfterDiscount / NetInvoice ELSE 0 END AS ItemPerc, SysAddresses_2.TaxTypeID, StrVoucherHeader_2.TotalInvoice, 
                                                                           StrVoucherHeader_2.TotalDiscount AS headerDiscount, StrVoucherHeader_2.TotalTax AS headerTax, SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, StrVoucherHeader_2.ExchangePrice, 
                                                                           SysTaxTypes_1.TaxExemption
@@ -1950,12 +1951,12 @@ FROM     (SELECT myID, UnitCode, InvoiceQty, LineExtensionAmount, TaxAmount, Lin
                                                                           SysTaxTypes AS SysTaxTypes_3 RIGHT OUTER JOIN
                                                                           SysAddresses AS SysAddresses_2 ON SysTaxTypes_3.TaxID = SysAddresses_2.TaxTypeID ON StrVoucherHeader_2.DeliveryAddress = SysAddresses_2.AddressID LEFT OUTER JOIN
                                                                           SysTaxTypes AS SysTaxTypes_1 ON StrVoucherDetails_2.TaxID = SysTaxTypes_1.TaxID
-                                                        WHERE   (StrVoucherHeader_2.FiscalYearID = @FiscalyearID) AND (StrVoucherHeader_2.VoucherTypeID = @voucherTypeId) AND (StrVoucherHeader_2.VoucherNo = @voucherNo)) AS QSaleInfo_4) 
+                                                        WHERE  isnull(SetItemID,'') = '' and  (StrVoucherHeader_2.FiscalYearID = @FiscalyearID) AND (StrVoucherHeader_2.VoucherTypeID = @voucherTypeId) AND (StrVoucherHeader_2.VoucherNo = @voucherNo)) AS QSaleInfo_4) 
                                     AS QDetailsInfo
                   UNION ALL
-                  SELECT myID, UnitCode, InvoiceQty, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
+                  SELECT myID, UnitCode, InvoiceQty, TotalRowDiscount ,LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
                                     TaxExemption
-                  FROM     (SELECT myID, UnitCode, InvoiceQty, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, IsTaxable * (ISNULL(InvoiceQty, 0) 
+                  FROM     (SELECT myID, UnitCode, InvoiceQty,ISNULL(DiscountValue, 0) As TotalRowDiscount, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, IsTaxable * (ISNULL(InvoiceQty, 0) 
                                                       * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0))) * ISNULL(TaxPerc, 0) AS TaxAmount, IsTaxable * ISNULL(TaxPerc, 0) * 100 AS TaxCategoryPercent, ItemName, 
                                                       PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption
                                     FROM      (SELECT RecInvoiceDetails_2.RowNo AS myID, 'PCE' AS UnitCode, 1 AS InvoiceQty, ISNULL(ISNULL(SysSaleTypes.TypeNameE, SysSaleTypes.TypeNameA), ISNULL(GLChartAcc.ChartAccNameE, 
@@ -1977,9 +1978,9 @@ FROM     (SELECT myID, UnitCode, InvoiceQty, LineExtensionAmount, TaxAmount, Lin
                                                                          SysAddresses AS SysAddresses_2 ON SysTaxTypes_3.TaxID = SysAddresses_2.TaxTypeID ON RecInvoiceHeader_2.DeliveryAddress = SysAddresses_2.AddressID
                                                        WHERE   (RecInvoiceHeader_2.FiscalYearID = @FiscalyearID) AND (RecInvoiceHeader_2.InvoiceTypeID = @voucherTypeId) AND (RecInvoiceHeader_2.InvoiceNo = @voucherNo)) AS QSaleInfo_4) AS QDetailsInfo
                   UNION ALL
-                  SELECT myID, UnitCode, InvoiceQty, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
+                  SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
                                     TaxExemption
-                  FROM     (SELECT myID, UnitCode, InvoiceQty, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, IsTaxable * (ISNULL(InvoiceQty, 0) 
+                  FROM     (SELECT myID, UnitCode, InvoiceQty,ISNULL(DiscountValue, 0) As TotalRowDiscount, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, IsTaxable * (ISNULL(InvoiceQty, 0) 
                                                       * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0))) * ISNULL(TaxPerc, 0) AS TaxAmount, IsTaxable * ISNULL(TaxPerc, 0) * 100 AS TaxCategoryPercent, ItemName, 
                                                       PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption
                                     FROM      (SELECT SchStudentTrans_2.RowNo AS myID, 'PCE' AS UnitCode, 1 AS InvoiceQty, ISNULL(SchFees.FeesNameE, SchFees.FeesNameA) AS ItemName, SchRegSemesters.FeesAmount AS PriceAmount, 
@@ -2044,9 +2045,9 @@ FROM     (SELECT myID, UnitCode, InvoiceQty, LineExtensionAmount, TaxAmount, Lin
                                                        WHERE  (SysVoucherTypes.CatID = 6) AND (SchRegistrationVoucherHeader_2.FiscalYearID = @FiscalyearID) AND (SchRegistrationVoucherHeader_2.VoucherTypeID = @voucherTypeId) AND 
                                                                          (SchRegistrationVoucherHeader_2.VoucherNo = @voucherNo)) AS QSaleInfo_4) AS QDetailsInfo
                   UNION ALL
-                  SELECT myID, UnitCode, InvoiceQty, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
+                  SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
                                     TaxExemption
-                  FROM     (SELECT myID, UnitCode, InvoiceQty, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, IsTaxable * (ISNULL(InvoiceQty, 0) 
+                  FROM     (SELECT myID, UnitCode, InvoiceQty,ISNULL(DiscountValue, 0) As TotalRowDiscount, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, IsTaxable * (ISNULL(InvoiceQty, 0) 
                                                       * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0))) * ISNULL(TaxPerc, 0) AS TaxAmount, IsTaxable * ISNULL(TaxPerc, 0) * 100 AS TaxCategoryPercent, ItemName, 
                                                       PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption
                                     FROM      (SELECT AstVoucherDetails_2.RowNo AS myID, ISNULL(ISNULL(StrUnits.UnitCodeE, StrUnits.UnitCodeA), 'PCE') AS UnitCode, 1 AS InvoiceQty, ISNULL(AstAssets.AssetNameE, AstAssets.AssetNameA) AS ItemName, 

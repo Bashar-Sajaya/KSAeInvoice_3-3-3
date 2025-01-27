@@ -17,13 +17,28 @@ Imports System.Xml
 Namespace CSR.Api
     Public Class ZatcaCSRClient
 
-        Private Const DeveloperComplianceEndpoint As String = "https://gw-apic-gov.gazt.gov.sa/e-invoicing/developer-portal/compliance"
-        Private Const DeveloperComplianceCheckInvoiceEndpoint As String = "https://gw-apic-gov.gazt.gov.sa/e-invoicing/developer-portal/compliance/invoices"
-        Private Const DeveloperProductionCSIDEndpoint As String = "https://gw-apic-gov.gazt.gov.sa/e-invoicing/developer-portal/production/csids"
+        'OLD
+        'Private Const DeveloperComplianceEndpoint As String = "https: //gw-apic-gov.gazt.gov.sa/e-invoicing/developer-portal/compliance"
+        'Private Const DeveloperComplianceCheckInvoiceEndpoint As String = "https: //gw-apic-gov.gazt.gov.sa/e-invoicing/developer-portal/compliance/invoices"
+        'Private Const DeveloperProductionCSIDEndpoint As String = "https: //gw-apic-gov.gazt.gov.sa/e-invoicing/developer-portal/production/csids"
 
-        Private Const CoreComplianceEndpoint As String = "https://gw-apic-gov.gazt.gov.sa/e-invoicing/core/compliance"
-        Private Const CoreComplianceCheckInvoiceEndpoint As String = "https://gw-apic-gov.gazt.gov.sa/e-invoicing/core/compliance/invoices"
-        Private Const CoreProductionCSIDEndpoint As String = "https://gw-apic-gov.gazt.gov.sa/e-invoicing/core/production/csids"
+        'NEW 26/01/2025: Modified in the same manner as the Core URLs below,
+        'the modification for these URLs were not included in the ZATCA email sent to SKFH.
+        Private Const DeveloperComplianceEndpoint As String = "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal/compliance"
+        Private Const DeveloperComplianceCheckInvoiceEndpoint As String = "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal/compliance/invoices"
+        Private Const DeveloperProductionCSIDEndpoint As String = "https://gw-fatoora.zatca.gov.sa/e-invoicing/developer-portal/production/csids"
+
+        'Request a pre-compliance CSID
+        'Private Const CoreComplianceEndpoint As String = "https: //gw-apic-gov.gazt.gov.sa/e-invoicing/core/compliance" 'OLD
+        Private Const CoreComplianceEndpoint As String = "https://gw-fatoora.zatca.gov.sa/e-invoicing/core/compliance"  'NEW 26/01/2025
+
+        'Run compliance checks for reporting and clearance
+        'Private Const CoreComplianceCheckInvoiceEndpoint As String = "https: //gw-apic-gov.gazt.gov.sa/e-invoicing/core/compliance/invoices" 'OLD
+        Private Const CoreComplianceCheckInvoiceEndpoint As String = "https://gw-fatoora.zatca.gov.sa/e-invoicing/core/compliance/invoices" 'NEW 26/01/2025
+
+        'Request or renew a production CSID
+        'Private Const CoreProductionCSIDEndpoint As String = "https: //gw-apic-gov.gazt.gov.sa/e-invoicing/core/production/csids" 'OLD
+        Private Const CoreProductionCSIDEndpoint As String = "https://gw-fatoora.zatca.gov.sa/e-invoicing/core/production/csids" 'NEW 26/01/2025
 
         Private Const OpenSSLPath As String = "C:\Program Files\OpenSSL-Win64\bin\openssl.exe"
 
