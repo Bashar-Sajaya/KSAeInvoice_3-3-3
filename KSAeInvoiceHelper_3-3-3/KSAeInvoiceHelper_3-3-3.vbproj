@@ -73,6 +73,7 @@
     <Import Include="System.Threading.Tasks" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ExtractUBl.vb" />
     <Compile Include="GeneralFunctions333.vb" />
     <Compile Include="InvoiceHelper333.vb" />
     <Compile Include="Models\AccountingCustomerPartyInfoB.vb" />
@@ -86,6 +87,7 @@
     <Compile Include="Models\LegalMonetaryTotalInfoB.vb" />
     <Compile Include="Models\ReportResult.vb" />
     <Compile Include="Models\Response.vb" />
+    <Compile Include="Models\SourceItem.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
       <AutoGen>True</AutoGen>

@@ -14,4 +14,12 @@
     Public Property ChargeIndicator As Boolean
     Public Property AllowanceChargeReason As String
     Public Property AllowanceChargeAmount As Decimal
+
+    'modif Ibrahim
+    Public Property TotalRowDiscount As Decimal
+
+    Public Property TotalPriceAmountAfterDiscount As Decimal
+
+    Public Property TaxAmountLine As Decimal
+
 End Class

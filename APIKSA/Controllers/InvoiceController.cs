@@ -106,7 +106,7 @@ namespace APIKSA.Controllers
         private async Task<InvoiceResult> SendInvoiceAsync(InvoiceHelperInput input, string clientConnectionString, string commonConnectionString)
         {
             var invoiceHelper = new InvoiceHelper333(input.CompanyId, clientConnectionString, commonConnectionString, input.SajayaClientID);
-            return await invoiceHelper.SendInvoiceAsync(input.FiscalYearId, input.VoucherTypeId, input.VoucherNo, input.IsStandard, input.IsWarnings);
+            return await invoiceHelper.SendInvoiceAsync( input.SubSajayaClientID,input.FiscalYearId, input.VoucherTypeId, input.VoucherNo, input.IsStandard, input.IsWarnings);
         }
 
         private async Task<InvoiceResult> ReportInvoiceAsync(ReportInvoiceInput input, string clientConnectionString, string commonConnectionString)

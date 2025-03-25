@@ -1,4 +1,5 @@
-﻿Imports System.Data.SqlClient
+﻿Imports System.ComponentModel.Design
+Imports System.Data.SqlClient
 Imports System.IO
 Imports System.Net
 Imports System.Net.Http
@@ -9,6 +10,7 @@ Imports System.Text.RegularExpressions
 Imports System.Xml
 Imports Newtonsoft.Json
 Imports Newtonsoft.Json.Linq
+Imports Zatca.EInvoice.SDK.Contracts.Models
 
 #Region "Public Class"
 Public Class InvoiceHelper333
@@ -31,11 +33,13 @@ Public Class InvoiceHelper333
         _commonConnectionString = commonConnectionString
         _sajayaClientID = sajayaClientID
     End Sub
+
 #End Region '"Public Class"
 
 #Region "Main"
 
-    Public Async Function SendInvoiceAsync(fiscalYearId As Integer,
+    Public Async Function SendInvoiceAsync(SubSajayaClientID As string,
+                                          fiscalYearId As Integer,
                                            voucherTypeId As Integer,
                                            voucherNo As Integer,
                                            isStandard As Boolean,
@@ -69,19 +73,32 @@ Public Class InvoiceHelper333
 
             Dim nextCounter As Integer = GetNextCounter()
             Dim previousInvoiceHash As String = GetPIH()
-
             ' Generate invoice XML
-            Dim xmlInvoice As String = GenerateInvoiceXml(invoiceData, taxCatPercent, isStandard, previousInvoiceHash, nextCounter)
+            Dim xmlInvoice As String = GenerateInvoiceXml(invoiceData, taxCatPercent, isStandard, previousInvoiceHash, nextCounter, fiscalYearId, voucherTypeId, voucherNo)
+
+
+            ' Save XML to temporary file
+
+            Dim ClientID As String = GetClientID(SubSajayaClientID)
+
+
+
+            ' Dim xmlInvoiceTwo As String = ExtractUBle.ProcessXmlFilee(xmlInvoice)
+
+
             Dim csrResult As CSRResult = GetCSRFromDB(_companyId, voucherId)
             Dim decodedCertificate As String = DecodeBase64String(csrResult.BinarySecurityToken)
+
+
 
             ' Format the current datetime and VoucherID for the filename
             Dim dateTimeFormat As String = DateTime.Now.ToString("yyyyMMddHHmmssfff")
             Dim voucherIdForFileName As String = invoiceData.InvoiceInfo.VoucherID
+            Dim tempXmlFileName As String = $"tempInvoice_{dateTimeFormat}_{ClientID}_{voucherIdForFileName}.xml"
 
-            ' Save XML to temporary file
-            Dim tempXmlFileName As String = $"tempInvoice_{dateTimeFormat}_{voucherIdForFileName}.xml"
+
             Dim tempXmlPath As String = SaveXmlToTempFile(xmlInvoice, tempXmlFileName)
+
 
             ' Sign the XML document using the appropriate SDK
             Dim xmlDocument As New XmlDocument With {
@@ -102,13 +119,15 @@ Public Class InvoiceHelper333
             Dim signedXmlWithDeclaration As String = signedXml
 
             Dim validationResult As InvoiceResult = generalFunctions.ZATCA_ValidateEInvoice(SignedXmlDocument, decodedCertificate, csrResult.PrivateKey)
-            If validationResult.success = False Then
-                Dim jsonString As String = JsonConvert.SerializeObject(validationResult, Newtonsoft.Json.Formatting.Indented)
-                If Not ValidateJson(jsonString, IsWarnings) Then
-                    validationResult.ErrorMessage = "Local Validation: Please note that the error with code KSA-13 (if exists) is generated exclusively during local validation."
-                    Return validationResult
+                If validationResult.success = False Then
+                    Dim jsonString As String = JsonConvert.SerializeObject(validationResult, Newtonsoft.Json.Formatting.Indented)
+                    If Not ValidateJson(jsonString, IsWarnings) Then
+                        validationResult.ErrorMessage = "Local Validation: Please note that the error with code KSA-13 (if exists) is generated exclusively during local validation."
+                        Return validationResult
+                    End If
                 End If
-            End If
+
+
             ' Get invoice details
             Dim invoiceDetails As Tuple(Of String, String) = GetInvoiceDetails(tempSignedXmlPath)
             Dim invoiceHash As String = invoiceDetails.Item2
@@ -129,7 +148,7 @@ Public Class InvoiceHelper333
 
                     ' Perform clearance API call
                     '***BFY*** Comment out the following line during testing to prevent sending the invoice to ZATCA.
-                    'apiResponse = Await PerformClearanceApiCall(httpClient, userAndSecret, signedBase64Xml, invoiceHash, uuid)
+                    apiResponse = Await PerformClearanceApiCall(httpClient, userAndSecret, signedBase64Xml, invoiceHash, uuid)
 
                     If apiResponse.statusCode = 200 OrElse apiResponse.statusCode = 202 Then
                         clearedInvoice = apiResponse.clearedInvoice
@@ -152,8 +171,8 @@ Public Class InvoiceHelper333
                 ' B2C Invoice Processing
                 qrCode = generalFunctions.ZATCA_GenerateQRCodeForXml(SignedXmlDocument)
                 status = 1
-                apiResponse.errors = validationResult.errors
-                apiResponse.warnings = validationResult.warnings
+                apiResponse.errors = ValidationResult.errors
+                apiResponse.warnings = ValidationResult.warnings
                 apiResponse.success = True
                 Dim warningsStr As String = ""
                 If Not IsWarnings Then
@@ -211,7 +230,7 @@ Public Class InvoiceHelper333
             }
                 ' Perform the API call and await its response
                 '***BFY*** Comment out the following line during testing to prevent sending the invoice to ZATCA.
-                'response = Await PerformReportingApiCall(httpClient, userAndSecret, invoiceData.SignedInvoice, invoiceData.InvoiceHash, invoiceData.UUID)
+                response = Await PerformReportingApiCall(httpClient, userAndSecret, invoiceData.SignedInvoice, invoiceData.InvoiceHash, invoiceData.UUID)
 
                 ' Check the response status code to determine the next action
                 If response.statusCode = 200 OrElse response.statusCode = 202 Then
@@ -318,14 +337,38 @@ Public Class InvoiceHelper333
         End If
     End Function
 
+    '   Private Function SaveXmlToTempFile(xmlContent As String, fileName As String) As String
+    '       Dim tempXmlPath As String = Path.Combine(Path.GetTempPath(), fileName)
+    '       If File.Exists(tempXmlPath) Then
+    '           File.Delete(tempXmlPath)
+    '       End If
+    '       File.WriteAllText(tempXmlPath, xmlContent)
+    '       Return tempXmlPath
+    '   End Function
+
     Private Function SaveXmlToTempFile(xmlContent As String, fileName As String) As String
-        Dim tempXmlPath As String = Path.Combine(Path.GetTempPath(), fileName)
+        ' تحديد المسار الكامل للمجلد والملف
+        Dim directoryPath As String = "C:\KSA_EInvoice"
+        Dim tempXmlPath As String = Path.Combine(directoryPath, fileName)
+
+        ' التحقق من وجود المجلد وإذا لم يكن موجودًا يتم إنشاؤه
+        If Not Directory.Exists(directoryPath) Then
+            Directory.CreateDirectory(directoryPath)
+        End If
+
+        ' التحقق من وجود الملف وإذا كان موجودًا يتم حذفه
         If File.Exists(tempXmlPath) Then
             File.Delete(tempXmlPath)
         End If
+
+        ' كتابة محتوى XML في الملف
         File.WriteAllText(tempXmlPath, xmlContent)
+
+        ' إرجاع المسار الكامل للملف
         Return tempXmlPath
     End Function
+
+
 
     Private Function DecodeBase64String(base64String As String) As String
         Return Encoding.UTF8.GetString(Convert.FromBase64String(base64String))
@@ -425,18 +468,19 @@ Public Class InvoiceHelper333
         Return If(node IsNot Nothing, node.InnerText, String.Empty)
     End Function
 
-    Private Function GenerateInvoiceXml(invoiceData As InvoiceData, taxCatPercent As Decimal, isStandard As Boolean, pih As String, nextCounter As Integer) As String
+    Private Function GenerateInvoiceXml(invoiceData As InvoiceData, taxCatPercent As Decimal, isStandard As Boolean, pih As String, nextCounter As Integer, fiscalYearId As Integer, voucherTypeId As Integer, voucherNo As Integer) As String
         Dim invCatID As Integer = invoiceData.InvoiceInfo.CatID
         Dim invoiceXml As String
 
         Try
             If invCatID = 0 Then
-                invoiceXml = GenerateXmlForInvoice(invoiceData, taxCatPercent, isStandard, pih, nextCounter)
+                invoiceXml = GenerateXmlForInvoice(invoiceData, taxCatPercent, isStandard, pih, nextCounter, fiscalYearId, voucherTypeId, voucherNo)
             ElseIf invCatID = 1 OrElse invCatID = 2 Then
-                invoiceXml = GenerateXmlForInvoice(invoiceData, taxCatPercent, isStandard, pih, nextCounter)
+                invoiceXml = GenerateXmlForInvoice(invoiceData, taxCatPercent, isStandard, pih, nextCounter, fiscalYearId, voucherTypeId, voucherNo)
             Else
                 Throw New Exception("Invalid invoice category ID.")
             End If
+            Return invoiceXml
         Catch ex As Exception
             Dim voucherId As String = invoiceData.InvoiceInfo.VoucherID
             Dim message As String = "Failed to generate XML: " & ex.Message
@@ -622,7 +666,9 @@ Public Class InvoiceHelper333
                             .ByerNationalNo = If(reader("ByerNationalNo") Is DBNull.Value, String.Empty, reader("ByerNationalNo").ToString()),
                             .ByerCommRegNo = If(reader("ByerCommRegNo") Is DBNull.Value, String.Empty, reader("ByerCommRegNo").ToString()),
                             .ByerCountryCode = If(reader("ByerCountryCode") Is DBNull.Value, String.Empty, reader("ByerCountryCode").ToString()),
-                            .BuyerIsTaxable = reader("IsTaxable")
+                            .BuyerIsTaxable = reader("IsTaxable"),
+                            .CatID2 = If(reader("CatID") Is DBNull.Value, 0, Convert.ToInt32(reader("CatID"))),
+                            .ModuleID = If(reader("ModuleID") Is DBNull.Value, 0, Convert.ToInt32(reader("ModuleID")))
                         }
 
                         invoiceData.InvoiceInfo = invoiceInfo
@@ -656,7 +702,14 @@ Public Class InvoiceHelper333
                             .ItemTotalPriceAfterTax = Convert.ToDecimal(reader("RoundingAmount")),
                             .TaxExemption = reader("TaxExemption").ToString(),
                             .TaxPerc = If(IsDBNull(reader("TaxCategoryPercent")), 0D, Convert.ToDecimal(reader("TaxCategoryPercent"))),
-                            .TaxAmount = If(IsDBNull(reader("TaxAmount")), 0D, Convert.ToDecimal(reader("TaxAmount")))
+                            .TaxAmount = If(IsDBNull(reader("TaxAmount")), 0D, Convert.ToDecimal(reader("TaxAmount"))),
+                            .TotalRowDiscount = Convert.ToDecimal(reader("TotalRowDiscount")), 'Modify Ibrahim 
+                            .HeaderDisount = Convert.ToDecimal(reader("HeaderDisount")), 'Modify Ibrahim 
+                            .TotalPriceAmountAfterDiscount = Convert.ToDecimal(reader("TotalPriceAmountAfterDiscount")),'Modify Ibrahim 
+                            .SourceFiscalYearID = If(IsDBNull(reader("SourceFiscalYearID")), 0, Convert.ToInt32(reader("SourceFiscalYearID"))),'Modify Ibrahim 
+                            .SourceVoucherTypeID = If(IsDBNull(reader("SourceVoucherTypeID")), 0, Convert.ToInt32(reader("SourceVoucherTypeID"))),'Modify Ibrahim 
+                            .SourceVoucherNo = If(IsDBNull(reader("SourceVoucherNo")), 0, Convert.ToInt32(reader("SourceVoucherNo"))),'Modify Ibrahim 
+                            .SourceStr = If(String.IsNullOrEmpty(reader("SourceStr").ToString()), Nothing, reader("SourceStr").ToString())
                         }
                             items.Add(itemInfo)
                         End While
@@ -666,13 +719,114 @@ Public Class InvoiceHelper333
                 End Using
             End Using
 
-            Return invoiceData
+            Dim SourceinvoiceData = ExtractUBle.SourceCreditorNotice(invoiceData)
+
+            If SourceinvoiceData.SourceFiscalYearID <> 0 AndAlso SourceinvoiceData.SourceVoucherTypeID <> 0 Then
+                Using connection As New SqlConnection(_clientConnectionString)
+                    connection.Open()
+
+                    Dim SourceinvoiceInfoQuery As String = GetSourceVoucherDataQuery()
+                    Using command As New SqlCommand(SourceinvoiceInfoQuery, connection)
+                        command.Parameters.AddWithValue("@fiscalYearId", SourceinvoiceData.SourceFiscalYearID)
+                        command.Parameters.AddWithValue("@voucherTypeId", SourceinvoiceData.SourceVoucherTypeID)
+                        command.Parameters.AddWithValue("@voucherNo", SourceinvoiceData.SourceVoucherNo)
+                        command.Parameters.AddWithValue("@companyId", _companyId)
+
+                        Using reader As SqlDataReader = command.ExecuteReader()
+                            If reader.Read() Then
+                                Dim SourceInvoiceInfo As New SourceInvoiceInfo With {
+                        .SourceTotalInvoiceLC = If(reader("TotalInvoiceLC") Is DBNull.Value, 0D, Convert.ToDecimal(reader("TotalInvoiceLC"))),
+                        .SourceUUID = If(reader("UUID") Is DBNull.Value, Nothing, reader("UUID").ToString()),
+                        .SourceVoucherID = If(reader("VoucherID") Is DBNull.Value, Nothing, reader("VoucherID").ToString())
+                    }
+
+                                invoiceData.SourceInvoiceInfo = SourceInvoiceInfo
+                            End If
+                        End Using
+                    End Using
+                End Using
+            End If
+
+            Dim invoiceDataNew = UpdateInvoiceData(invoiceData)
+
+            Return invoiceDataNew
         Catch ex As Exception
             Dim message As String = "Failed to fetch invoice data from the DB: " & ex.Message
             Debug.WriteLine(message)
             Return Nothing
         End Try
     End Function
+
+
+    Public Function UpdateInvoiceData(invoiceData As InvoiceData) As InvoiceData
+        Try
+
+            Dim MinusTotalDiscount As Decimal = 0
+            Dim TotalDiscountSumHeader As Decimal = 0
+            Dim MaxDiscount As Decimal = 0
+            Dim MinusTotalDiscoun As Decimal = 0
+            Dim MaxTaxable As Decimal = 0
+
+            ' تحقق من قيمة الخصم
+            If invoiceData.InvoiceInfo.TotalDiscountLC <> 0 Then
+                Dim TotalDiscountHeader As Decimal = invoiceData.InvoiceInfo.TotalDiscountLC
+
+
+                ' حساب مجموع الخصومات
+                TotalDiscountSumHeader = invoiceData.Items.Sum(Function(item) Math.Round(item.HeaderDisount, 2))
+
+                ' حساب الفرق في الخصومات
+                MinusTotalDiscoun = TotalDiscountHeader - TotalDiscountSumHeader
+
+                If MinusTotalDiscoun <> 0 Then
+                    ' محاولة العثور على عنصر مع نسبة خصم صفر
+                    Dim foundZeroPercent As Boolean = False
+                    For Each item In invoiceData.Items
+                        If item.TaxPerc = 0 AndAlso item.TaxPerc <> Nothing Then
+                            item.HeaderDisount = Math.Round(item.HeaderDisount, 2) + MinusTotalDiscoun
+                            item.TotalPriceLC = Math.Round(item.TotalPriceLC, 2) - MinusTotalDiscoun
+                            foundZeroPercent = True
+                            Exit For
+                        End If
+                    Next
+
+                    ' إذا لم يتم العثور على خصم صفر، قم بالبحث عن أكبر خصم
+
+                    If Not foundZeroPercent Then
+                        MaxDiscount = invoiceData.Items.Max(Function(item) Math.Round(item.HeaderDisount, 2))
+                        For Each item In invoiceData.Items
+                            If Math.Round(item.HeaderDisount, 2) >= MaxDiscount Then
+                                item.HeaderDisount = Math.Round(item.HeaderDisount, 2) + MinusTotalDiscoun
+                                Exit For
+                            End If
+                        Next
+                    End If
+
+
+                    ' إذا لم يتم العثور على خصم بنسبة صفر، قم بتحديث TotalPriceLC باستخدام MaxDiscount
+                    If Not foundZeroPercent Then
+                        MaxTaxable = invoiceData.Items.Max(Function(item) Math.Round(item.TotalPriceLC, 2))
+                        For Each item In invoiceData.Items
+                            If Math.Round(item.TotalPriceLC, 2) >= MaxDiscount Then
+                                item.TotalPriceLC = Math.Round(item.TotalPriceLC, 2) - MinusTotalDiscoun
+                                Exit For
+                            End If
+                        Next
+                    End If
+                End If
+            End If
+
+            Return invoiceData
+        Catch ex As Exception
+
+            Return invoiceData
+        End Try
+
+    End Function
+
+
+
+
 
     'Private Function ValidateData(fiscalYearId As Integer, voucherTypeId As Integer, voucherNo As Integer) As Response
     '    ' Validation logic here if needed
@@ -691,10 +845,8 @@ Public Class InvoiceHelper333
     ''' <param name="isStandard">Indicates if the invoice is standard.</param>
     ''' <param name="pih">The PIH value.</param>
     ''' <param name="nextCounter">The next counter value.</param>
-    ''' <param name="InvoiceDocumentReferenceID">Optional. The invoice document reference ID for debit/credit notes.</param>
-    ''' <param name="InstructionNote">Optional. The instruction note for payment means.</param>
     ''' <returns>An XML string representing the invoice or debit/credit note.</returns>
-    Function GenerateXmlForInvoice(invoiceData As InvoiceData, taxCatPercent As Decimal, isStandard As Boolean, pih As String, nextCounter As Integer, Optional InvoiceDocumentReferenceID As String = Nothing, Optional InstructionNote As String = Nothing) As String
+    Function GenerateXmlForInvoice(invoiceData As InvoiceData, taxCatPercent As Decimal, isStandard As Boolean, pih As String, nextCounter As Integer, fiscalYearId As Integer, voucherTypeId As Integer, voucherNo As Integer) As String
         Dim xmlDoc As New XmlDocument()
         Dim xmlDeclaration As XmlDeclaration = xmlDoc.CreateXmlDeclaration("1.0", "UTF-8", Nothing)
         xmlDoc.AppendChild(xmlDeclaration)
@@ -715,7 +867,7 @@ Public Class InvoiceHelper333
 
         ' Section (a)
         Dim invoiceBasicInfo As InvoiceInfo = invoiceData.InvoiceInfo
-        Dim InvoiceBasic = MapToInvoiceBasicInfoB(invoiceBasicInfo, isStandard, pih, nextCounter, InvoiceDocumentReferenceID)
+        Dim InvoiceBasic = MapToInvoiceBasicInfoB(invoiceBasicInfo, isStandard, pih, nextCounter, invoiceData.SourceInvoiceInfo?.SourceVoucherID)
         invoiceElement = CreateInvoiceBasicInfoBElement(xmlDoc, InvoiceBasic, invoiceElement)
 
         ' Section (b)
@@ -745,7 +897,7 @@ Public Class InvoiceHelper333
         Dim Delivery As XmlElement = CreateDeliveryElement(xmlDoc, SellerSupplierParty)
         invoiceElement.AppendChild(Delivery)
 
-        Dim PaymentMeans As XmlElement = CreatePaymentMeansElement(xmlDoc, SellerSupplierParty, InstructionNote)
+        Dim PaymentMeans As XmlElement = CreatePaymentMeansElement(xmlDoc, SellerSupplierParty)
         invoiceElement.AppendChild(PaymentMeans)
 
         ' Section (e)
@@ -754,13 +906,53 @@ Public Class InvoiceHelper333
         invoiceElement = CreateAllowanceChargeElement(xmlDoc, LegalMonetaryTotal, invoiceElement, taxCatPercent, Result)
 
         ' Section (f)
-        For Each itemInfo As ItemInfo In invoiceData.Items
-            Dim invoiceLineInfo = MapToInvoiceLineInfoB(itemInfo, invInfo.BuyerIsTaxable)
-            Dim invoiceLineElement As XmlElement = CreateInvoiceLineBElement(xmlDoc, invoiceLineInfo)
-            invoiceElement.AppendChild(invoiceLineElement)
+        'Modfiy Ibrahim
+        Dim codeTax As List(Of String) = New List(Of String)()
+        For Each group As ItemTaxGroupInfo In Result
+
+            'Modfiy Ibrahim
+
+            If group.TaxType = "Z" OrElse group.TaxType = "O" OrElse group.TaxType = "E" Then
+                Dim ResultTaxcode = GetZeroTaxExemptionText(group.TaxExemption)
+                codeTax.Add(ResultTaxcode.TaxCode)
+
+            Else
+                codeTax.Add("1")
+            End If
+
         Next
 
+        'Modfiy Ibrahim
+        Dim Counter As Int32 = 0
+        For Each itemInfo As ItemInfo In invoiceData.Items
+
+            Dim taxCodeToUse As String
+
+            Dim invoiceLineInfo = MapToInvoiceLineInfoB(itemInfo, invInfo.BuyerIsTaxable)
+
+            If Counter < Result.Count Then
+                If codeTax Is Nothing AndAlso codeTax.Any() Then
+                    taxCodeToUse = invoiceLineInfo.TaxCategoryID
+
+
+                ElseIf codeTax(Counter) <> "1" AndAlso Counter < invoiceData.Items.Count Then
+                    taxCodeToUse = codeTax(Counter)
+
+                Else codeTax(Counter) = "1"
+                    taxCodeToUse = invoiceLineInfo.TaxCategoryID
+                End If
+            Else
+                taxCodeToUse = invoiceLineInfo.TaxCategoryID
+            End If
+
+            Dim invoiceLineElement As XmlElement = CreateInvoiceLineBElement(xmlDoc, invoiceLineInfo, taxCodeToUse)
+            invoiceElement.AppendChild(invoiceLineElement)
+            Counter += 1
+        Next
         ' Convert the XML to string and insert a newline after the XML declaration
+
+
+
         Dim xmlString As String = xmlDoc.OuterXml
         Dim declarationEnd As String = "?>"
         Dim declarationIndex As Integer = xmlString.IndexOf(declarationEnd)
@@ -768,10 +960,13 @@ Public Class InvoiceHelper333
             xmlString = xmlString.Insert(declarationIndex + declarationEnd.Length, Environment.NewLine)
         End If
 
+        'Modfiy Ibrahim
+        UpdateVoucherData(fiscalYearId, voucherTypeId, voucherNo, InvoiceBasic.UUID)
+
         Return xmlString
     End Function
 
-    Function MapToInvoiceBasicInfoB(invoiceInfo As InvoiceInfo, isStandard As Boolean, pih As String, nextCounter As Integer, Optional InvoiceDocumentReferenceID As String = Nothing) As InvoiceBasicInfoB
+    Function MapToInvoiceBasicInfoB(invoiceInfo As InvoiceInfo, isStandard As Boolean, pih As String, nextCounter As Integer, SourceVoucherID As String) As InvoiceBasicInfoB
         Dim currentDateTime As DateTime = DateTime.Now
 
         Return New InvoiceBasicInfoB With {
@@ -787,7 +982,7 @@ Public Class InvoiceHelper333
         .AdditionalDocumentReferenceUUID = nextCounter.ToString(),
         .IssueTime = currentDateTime.ToString("HH:mm:ss"),
         .PIH = pih,
-        .InvoiceDocumentReferenceID = InvoiceDocumentReferenceID
+        .InvoiceDocumentReferenceID = SourceVoucherID
     }
     End Function
 
@@ -835,7 +1030,8 @@ Public Class InvoiceHelper333
         Return New DeliveryAndPaymentMeansInfoB With {
         .ActualDeliveryDate = info.ActualDeliveryDate.ToString("yyyy-MM-dd"),
         .LatestDeliveryDate = info.LatestDeliveryDate.ToString("yyyy-MM-dd"),
-        .PaymentMeansCode = info.PaymentMeansCode
+        .PaymentMeansCode = info.PaymentMeansCode,
+        .Note = info.Note
     }
     End Function
 
@@ -852,22 +1048,228 @@ Public Class InvoiceHelper333
         Return New LegalMonetaryTotalInfoB With {
         .ChargeIndicator = False,
         .AllowanceChargeReason = "discount",
-        .Amount = Math.Round(invoiceInfo.TotalDiscountLC, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
-        .TaxAmount = Math.Round(invoiceInfo.TotalTaxLC, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
-        .TaxExclusiveAmount = Math.Round(invoiceInfo.NetInvoiceLC, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
-        .TaxInclusiveAmount = Math.Round(invoiceInfo.TotalInvoiceLC, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
-        .AllowanceTotalAmount = Math.Round(invoiceInfo.TotalDiscountLC, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
-        .PayableAmount = Math.Round(invoiceInfo.TotalInvoiceLC, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
+        .Amount = invoiceInfo.TotalDiscountLC,
+        .TaxAmount = invoiceInfo.TotalTaxLC,
+        .TaxExclusiveAmount = invoiceInfo.NetInvoiceLC,
+        .TaxInclusiveAmount = invoiceInfo.TotalInvoiceLC,
+        .AllowanceTotalAmount = invoiceInfo.TotalDiscountLC,
+        .PayableAmount = invoiceInfo.TotalInvoiceLC,
         .AllowanceChargeID = invoiceInfo.AllowanceChargeID,
-        .LineExtensionAmount = Math.Round(invoiceInfo.LineExtensionAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
-        .PrepaidAmount = Math.Round(invoiceInfo.PrepaidAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
-        .TaxableAmount = Math.Round(invoiceInfo.TaxableAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
+        .LineExtensionAmount = invoiceInfo.LineExtensionAmount,
+        .PrepaidAmount = invoiceInfo.PrepaidAmount,
+        .TaxableAmount = invoiceInfo.TaxableAmount,
         .TaxCategoryID = taxCategoryID,
-        .TaxCategoryPercent = Math.Round(invoiceInfo.TaxCategoryPercent, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
+        .TaxCategoryPercent = invoiceInfo.TaxCategoryPercent,
         .TaxSchemeID = "VAT"
     }
     End Function
+    Private Function CreateAllowanceChargeElement(xmlDoc As XmlDocument, allowanceChargeData As LegalMonetaryTotalInfoB, invoiceElement As XmlElement, taxCatPercent As Decimal, itemTaxGroup As List(Of ItemTaxGroupInfo)) As XmlElement
+        If allowanceChargeData.Amount > 0.0 Then
+            For Each group In itemTaxGroup
+                Dim allowanceChargeElement As XmlElement = xmlDoc.CreateElement("cac:AllowanceCharge", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
+                invoiceElement.AppendChild(allowanceChargeElement)
 
+
+
+                Dim IDElement As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                ' IDElement.InnerText = allowanceChargeData.AllowanceChargeID
+                'Modfiy Ibrahim 
+                IDElement.InnerText = group.ID
+                allowanceChargeElement.AppendChild(IDElement)
+
+                Dim chargeIndicatorElement As XmlElement = xmlDoc.CreateElement("cbc:ChargeIndicator", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                chargeIndicatorElement.InnerText = allowanceChargeData.ChargeIndicator.ToString().ToLower()
+                allowanceChargeElement.AppendChild(chargeIndicatorElement)
+
+                Dim allowanceChargeReasonElement As XmlElement = xmlDoc.CreateElement("cbc:AllowanceChargeReason", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                allowanceChargeReasonElement.InnerText = allowanceChargeData.AllowanceChargeReason
+                allowanceChargeElement.AppendChild(allowanceChargeReasonElement)
+
+                Dim amountElement As XmlElement = xmlDoc.CreateElement("cbc:Amount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                amountElement.SetAttribute("currencyID", "SAR")
+                ' amountElement.InnerText = Math.Round(group.TotalDiscount, 2, MidpointRounding.AwayFromZero).ToString("0.00") HeaderDisount
+                '
+                'modfiy Ibrhim 
+                amountElement.InnerText = Math.Round(group.HeaderDisount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+
+
+
+                allowanceChargeElement.AppendChild(amountElement)
+
+                Dim TaxCategory As XmlElement = xmlDoc.CreateElement("cac:TaxCategory", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
+                allowanceChargeElement.AppendChild(TaxCategory)
+
+                'Modify Ibrahim
+                If group.TaxType <> "Z" AndAlso group.TaxType <> "O" AndAlso group.TaxType <> "E" Then
+                    Dim taxCategoryIDElement As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                    taxCategoryIDElement.SetAttribute("schemeAgencyID", "6")
+                    taxCategoryIDElement.SetAttribute("schemeID", "UN/ECE 5305")
+                    taxCategoryIDElement.InnerText = group.TaxType
+                    TaxCategory.AppendChild(taxCategoryIDElement)
+
+                    'Modify Ibrahim
+                ElseIf group.TaxType = "Z" OrElse group.TaxType = "O" OrElse group.TaxType = "E" Then
+                    Dim result = GetZeroTaxExemptionText(group.TaxExemption)
+
+
+                    Dim taxCategoryIDElement As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                    taxCategoryIDElement.SetAttribute("schemeAgencyID", "6")
+                    taxCategoryIDElement.SetAttribute("schemeID", "UN/ECE 5305")
+                    taxCategoryIDElement.InnerText = result.TaxCode
+                    TaxCategory.AppendChild(taxCategoryIDElement)
+                End If
+
+                Dim taxCategoryPercentElement As XmlElement = xmlDoc.CreateElement("cbc:Percent", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                taxCategoryPercentElement.InnerText = group.TaxPercent.ToString()
+                TaxCategory.AppendChild(taxCategoryPercentElement)
+
+                Dim TaxScheme As XmlElement = xmlDoc.CreateElement("cac:TaxScheme", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
+                TaxCategory.AppendChild(TaxScheme)
+
+                Dim taxSchemeIDElement As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                taxSchemeIDElement.SetAttribute("schemeAgencyID", "6")
+                taxSchemeIDElement.SetAttribute("schemeID", "UN/ECE 5153")
+                taxSchemeIDElement.InnerText = allowanceChargeData.TaxSchemeID
+                TaxScheme.AppendChild(taxSchemeIDElement)
+            Next
+        End If
+
+        ' TaxTotal
+        Dim taxTotalElement As XmlElement = xmlDoc.CreateElement("cac:TaxTotal", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
+        invoiceElement.AppendChild(taxTotalElement)
+
+        Dim taxAmountElement As XmlElement = xmlDoc.CreateElement("cbc:TaxAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        taxAmountElement.SetAttribute("currencyID", "SAR")
+        taxAmountElement.InnerText = Math.Round(allowanceChargeData.TaxAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+        taxTotalElement.AppendChild(taxAmountElement)
+
+        ' Sub Tax in Header
+        For Each group In itemTaxGroup
+            Dim taxSubtotalElement As XmlElement = xmlDoc.CreateElement("cac:TaxSubtotal", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
+            taxTotalElement.AppendChild(taxSubtotalElement)
+
+
+
+            'If group.TaxType <> "Z" AndAlso group.TaxType <> "O" Then
+            Dim TaxableAmount As XmlElement = xmlDoc.CreateElement("cbc:TaxableAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+            TaxableAmount.SetAttribute("currencyID", "SAR")
+            TaxableAmount.InnerText = Math.Round(group.TotalPrice, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+            taxSubtotalElement.AppendChild(TaxableAmount)
+            'modify Ibrahim
+            ' TaxableAmount.InnerText = Math.Round(group.TotalPriceAmountAfterDiscount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+
+            'Modify Ibrahim
+            '  ElseIf group.TaxType = "Z" OrElse group.TaxType = "O" Then
+            '     Dim TaxableAmount As XmlElement = xmlDoc.CreateElement("cbc:TaxableAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+            '    TaxableAmount.SetAttribute("currencyID", "SAR")
+            '    Dim TaxableAmountZero As Decimal = allowanceChargeData.TaxExclusiveAmount - allowanceChargeData.AllowanceTotalAmount
+
+            '                TaxableAmount.InnerText = Math.Round(TaxableAmountZero, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+            '               taxSubtotalElement.AppendChild(TaxableAmount)
+            ' End If
+
+
+            Dim TaxAmount As XmlElement = xmlDoc.CreateElement("cbc:TaxAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+            TaxAmount.SetAttribute("currencyID", "SAR")
+            TaxAmount.InnerText =  Math.Round(group.TaxAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+            taxSubtotalElement.AppendChild(TaxAmount)
+
+            Dim TaxCategorysub As XmlElement = xmlDoc.CreateElement("cac:TaxCategory", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
+            taxSubtotalElement.AppendChild(TaxCategorysub)
+
+            ' Modify Ibrahim
+            If group.TaxType <> "Z" AndAlso group.TaxType <> "O" AndAlso group.TaxType <> "E" Then
+                Dim taxCategoryID As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                taxCategoryID.SetAttribute("schemeAgencyID", "6")
+                taxCategoryID.SetAttribute("schemeID", "UN/ECE 5305")
+                taxCategoryID.InnerText = group.TaxType
+                TaxCategorysub.AppendChild(taxCategoryID)
+
+                Dim taxCategoryPercent As XmlElement = xmlDoc.CreateElement("cbc:Percent", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                taxCategoryPercent.InnerText = group.TaxPercent.ToString()
+                TaxCategorysub.AppendChild(taxCategoryPercent)
+            End If
+            ' Handle Tax Exemptions
+            ' Modify
+
+            If group.TaxType = "Z" OrElse group.TaxType = "O" OrElse group.TaxType = "E" Then
+
+                Dim result = GetZeroTaxExemptionText(group.TaxExemption)
+
+                Dim taxCategoryID As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                taxCategoryID.SetAttribute("schemeAgencyID", "6")
+                taxCategoryID.SetAttribute("schemeID", "UN/ECE 5305")
+                taxCategoryID.InnerText = If(String.IsNullOrEmpty(result.TaxCode), "Z", result.TaxCode)
+                TaxCategorysub.AppendChild(taxCategoryID)
+
+                Dim taxCategoryPercent As XmlElement = xmlDoc.CreateElement("cbc:Percent", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                taxCategoryPercent.InnerText = group.TaxPercent.ToString()
+                TaxCategorysub.AppendChild(taxCategoryPercent)
+
+                Dim taxExemptionReasonCode As XmlElement = xmlDoc.CreateElement("cbc:TaxExemptionReasonCode", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                taxExemptionReasonCode.InnerText = group.TaxExemption
+                TaxCategorysub.AppendChild(taxExemptionReasonCode)
+
+                Dim taxExemptionReason As XmlElement = xmlDoc.CreateElement("cbc:TaxExemptionReason", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+                taxExemptionReason.InnerText = result.Description
+                TaxCategorysub.AppendChild(taxExemptionReason)
+            End If
+
+            Dim TaxSchemeSub As XmlElement = xmlDoc.CreateElement("cac:TaxScheme", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
+            TaxCategorysub.AppendChild(TaxSchemeSub)
+
+            Dim TaxSchemeID As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+            TaxSchemeID.SetAttribute("schemeAgencyID", "6")
+            TaxSchemeID.SetAttribute("schemeID", "UN/ECE 5153")
+            TaxSchemeID.InnerText = allowanceChargeData.TaxSchemeID
+            TaxSchemeSub.AppendChild(TaxSchemeID)
+        Next
+
+        ' Total Tax = the sum of all sub-tax values
+        Dim taxTotalElement1 As XmlElement = xmlDoc.CreateElement("cac:TaxTotal", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
+        invoiceElement.AppendChild(taxTotalElement1)
+
+        Dim taxAmountElement1 As XmlElement = xmlDoc.CreateElement("cbc:TaxAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        taxAmountElement1.SetAttribute("currencyID", "SAR")
+        taxAmountElement1.InnerText = Math.Round(allowanceChargeData.TaxAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+        taxTotalElement1.AppendChild(taxAmountElement1)
+
+        ' LegalMonetaryTotal
+        Dim legalMonetaryTotalElement As XmlElement = xmlDoc.CreateElement("cac:LegalMonetaryTotal", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
+        invoiceElement.AppendChild(legalMonetaryTotalElement)
+
+        Dim LineExtensionAmountElement As XmlElement = xmlDoc.CreateElement("cbc:LineExtensionAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        LineExtensionAmountElement.SetAttribute("currencyID", "SAR")
+        LineExtensionAmountElement.InnerText = Math.Round(allowanceChargeData.TaxExclusiveAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+        legalMonetaryTotalElement.AppendChild(LineExtensionAmountElement)
+
+        Dim taxExclusiveAmountElement As XmlElement = xmlDoc.CreateElement("cbc:TaxExclusiveAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        taxExclusiveAmountElement.SetAttribute("currencyID", "SAR")
+        taxExclusiveAmountElement.InnerText = Math.Round(allowanceChargeData.LineExtensionAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+        legalMonetaryTotalElement.AppendChild(taxExclusiveAmountElement)
+
+        Dim taxInclusiveAmountElement As XmlElement = xmlDoc.CreateElement("cbc:TaxInclusiveAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        taxInclusiveAmountElement.SetAttribute("currencyID", "SAR")
+        taxInclusiveAmountElement.InnerText = Math.Round(allowanceChargeData.TaxInclusiveAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+        legalMonetaryTotalElement.AppendChild(taxInclusiveAmountElement)
+
+        Dim allowanceTotalAmountElement As XmlElement = xmlDoc.CreateElement("cbc:AllowanceTotalAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        allowanceTotalAmountElement.SetAttribute("currencyID", "SAR")
+        allowanceTotalAmountElement.InnerText = Math.Round(allowanceChargeData.AllowanceTotalAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+        legalMonetaryTotalElement.AppendChild(allowanceTotalAmountElement)
+
+        Dim PrepaidAmountElement As XmlElement = xmlDoc.CreateElement("cbc:PrepaidAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        PrepaidAmountElement.SetAttribute("currencyID", "SAR")
+        PrepaidAmountElement.InnerText = Math.Round(allowanceChargeData.PrepaidAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+        legalMonetaryTotalElement.AppendChild(PrepaidAmountElement)
+
+        Dim payableAmountElement As XmlElement = xmlDoc.CreateElement("cbc:PayableAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        payableAmountElement.SetAttribute("currencyID", "SAR")
+        payableAmountElement.InnerText = Math.Round(allowanceChargeData.PayableAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+        legalMonetaryTotalElement.AppendChild(payableAmountElement)
+
+        Return invoiceElement
+    End Function
     Function MapToInvoiceLineInfoB(item As ItemInfo, BuyerIsTaxable As Boolean) As InvoiceLineInfoB
         Dim taxCategoryID As String
         If Not BuyerIsTaxable Then
@@ -882,18 +1284,21 @@ Public Class InvoiceHelper333
         .ID = item.ItemCode,
         .UnitCode = "PCE",
         .InvoicedQuantity = item.Qty,
-        .LineExtensionAmount = Math.Round(item.TotalPriceLC, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
-        .TaxAmount = Math.Round(item.TaxAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
-        .RoundingAmount = Math.Round(item.ItemTotalPriceAfterTax, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
-        .TaxSubtotalAmount = Math.Round(item.TaxAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
+        .LineExtensionAmount = item.TotalPriceLC,
+        .TotalPriceAmountAfterDiscount = item.TotalPriceAmountAfterDiscount,
+        .TaxAmount = item.TaxAmount,
+        .RoundingAmount = item.TotalPriceAmountAfterDiscount + (item.TotalPriceAmountAfterDiscount * (item.TaxPerc / 100)),
+        .TaxSubtotalAmount = item.TaxAmount,
         .TaxCategoryID = taxCategoryID,
-        .TaxCategoryPercent = Math.Round(item.TaxPerc, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
+        .TaxCategoryPercent = item.TaxPerc,
         .TaxSchemeID = "VAT",
         .ItemName = item.ItemDesc,
-        .PriceAmount = Math.Round(item.ItemPriceLC, 2, MidpointRounding.AwayFromZero).ToString("0.00"),
+        .PriceAmount = item.ItemPriceLC,
         .ChargeIndicator = False,
         .AllowanceChargeReason = "discount",
-        .AllowanceChargeAmount = Math.Round(item.TotalDiscountLC, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+        .AllowanceChargeAmount = item.TotalDiscountLC,
+        .TotalRowDiscount = item.TotalRowDiscount,
+        .TaxAmountLine = item.TotalPriceAmountAfterDiscount * (item.TaxPerc / 100)
     }
     End Function
 
@@ -928,6 +1333,8 @@ Public Class InvoiceHelper333
         invoiceElement.AppendChild(taxCurrencyCodeElement)
 
         ' Include BillingReference and InvoiceDocumentReference if InvoiceDocumentReferenceID is provided
+        'QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
         If Not String.IsNullOrEmpty(newSectionAData.InvoiceDocumentReferenceID) Then
             Dim BillingReference As XmlElement = xmlDoc.CreateElement("cac:BillingReference", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
             invoiceElement.AppendChild(BillingReference)
@@ -966,6 +1373,7 @@ Public Class InvoiceHelper333
         Dim EmbeddedDocumentBinaryObject As XmlElement = xmlDoc.CreateElement("cbc:EmbeddedDocumentBinaryObject", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
         EmbeddedDocumentBinaryObject.SetAttribute("mimeCode", "text/plain")
         EmbeddedDocumentBinaryObject.InnerText = newSectionAData.PIH
+        'طnewSectionAData.PIH
         additionalDocAttachment1.AppendChild(EmbeddedDocumentBinaryObject)
 
         Return invoiceElement
@@ -1081,6 +1489,8 @@ Public Class InvoiceHelper333
             partyIdentificationElement.AppendChild(idElement)
         End If
 
+        'QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
         If Not newSectionCData.CustomerCompanyID.Contains("-") Then
             ' Create PostalAddress element
             Dim postalAddressElement As XmlElement = xmlDoc.CreateElement("cac:PostalAddress", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
@@ -1168,7 +1578,7 @@ Public Class InvoiceHelper333
         Return DeliveryElement
     End Function
 
-    Private Function CreatePaymentMeansElement(xmlDoc As XmlDocument, info As DeliveryAndPaymentMeansInfoB, Optional InstructionNote As String = Nothing) As XmlElement
+    Private Function CreatePaymentMeansElement(xmlDoc As XmlDocument, info As DeliveryAndPaymentMeansInfoB) As XmlElement
         Dim PaymentMeansElement As XmlElement = xmlDoc.CreateElement("cac:PaymentMeans", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
 
         Dim PaymentMeansCode As XmlElement = xmlDoc.CreateElement("cbc:PaymentMeansCode", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
@@ -1176,167 +1586,20 @@ Public Class InvoiceHelper333
         PaymentMeansElement.AppendChild(PaymentMeansCode)
 
         ' Include InstructionNote if provided
-        If Not String.IsNullOrEmpty(InstructionNote) Then
+        'QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+
+        If Not String.IsNullOrEmpty(info.Note) Then
             Dim InstructionNoteElement As XmlElement = xmlDoc.CreateElement("cbc:InstructionNote", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-            InstructionNoteElement.InnerText = InstructionNote
+            InstructionNoteElement.InnerText = info.Note
             PaymentMeansElement.AppendChild(InstructionNoteElement)
         End If
 
         Return PaymentMeansElement
     End Function
 
-    Private Function CreateAllowanceChargeElement(xmlDoc As XmlDocument, allowanceChargeData As LegalMonetaryTotalInfoB, invoiceElement As XmlElement, taxCatPercent As Decimal, itemTaxGroup As List(Of ItemTaxGroupInfo)) As XmlElement
-        If allowanceChargeData.Amount > 0.0 Then
-            For Each group In itemTaxGroup
-                Dim allowanceChargeElement As XmlElement = xmlDoc.CreateElement("cac:AllowanceCharge", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
-                invoiceElement.AppendChild(allowanceChargeElement)
 
-                Dim IDElement As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-                IDElement.InnerText = allowanceChargeData.AllowanceChargeID
-                allowanceChargeElement.AppendChild(IDElement)
 
-                Dim chargeIndicatorElement As XmlElement = xmlDoc.CreateElement("cbc:ChargeIndicator", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-                chargeIndicatorElement.InnerText = allowanceChargeData.ChargeIndicator.ToString().ToLower()
-                allowanceChargeElement.AppendChild(chargeIndicatorElement)
-
-                Dim allowanceChargeReasonElement As XmlElement = xmlDoc.CreateElement("cbc:AllowanceChargeReason", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-                allowanceChargeReasonElement.InnerText = allowanceChargeData.AllowanceChargeReason
-                allowanceChargeElement.AppendChild(allowanceChargeReasonElement)
-
-                Dim amountElement As XmlElement = xmlDoc.CreateElement("cbc:Amount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-                amountElement.SetAttribute("currencyID", "SAR")
-                amountElement.InnerText = group.TotalDiscount.ToString()
-                allowanceChargeElement.AppendChild(amountElement)
-
-                Dim TaxCategory As XmlElement = xmlDoc.CreateElement("cac:TaxCategory", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
-                allowanceChargeElement.AppendChild(TaxCategory)
-
-                Dim taxCategoryIDElement As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-                taxCategoryIDElement.SetAttribute("schemeAgencyID", "6")
-                taxCategoryIDElement.SetAttribute("schemeID", "UN/ECE 5305")
-                taxCategoryIDElement.InnerText = group.TaxType
-                TaxCategory.AppendChild(taxCategoryIDElement)
-
-                Dim taxCategoryPercentElement As XmlElement = xmlDoc.CreateElement("cbc:Percent", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-                taxCategoryPercentElement.InnerText = group.TaxPercent
-                TaxCategory.AppendChild(taxCategoryPercentElement)
-
-                Dim TaxScheme As XmlElement = xmlDoc.CreateElement("cac:TaxScheme", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
-                TaxCategory.AppendChild(TaxScheme)
-
-                Dim taxSchemeIDElement As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-                taxSchemeIDElement.SetAttribute("schemeAgencyID", "6")
-                taxSchemeIDElement.SetAttribute("schemeID", "UN/ECE 5153")
-                taxSchemeIDElement.InnerText = allowanceChargeData.TaxSchemeID
-                TaxScheme.AppendChild(taxSchemeIDElement)
-            Next
-        End If
-
-        ' TaxTotal
-        Dim taxTotalElement As XmlElement = xmlDoc.CreateElement("cac:TaxTotal", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
-        invoiceElement.AppendChild(taxTotalElement)
-
-        Dim taxAmountElement As XmlElement = xmlDoc.CreateElement("cbc:TaxAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        taxAmountElement.SetAttribute("currencyID", "SAR")
-        taxAmountElement.InnerText = allowanceChargeData.TaxAmount.ToString()
-        taxTotalElement.AppendChild(taxAmountElement)
-
-        ' Sub Tax in Header
-        For Each group In itemTaxGroup
-            Dim taxSubtotalElement As XmlElement = xmlDoc.CreateElement("cac:TaxSubtotal", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
-            taxTotalElement.AppendChild(taxSubtotalElement)
-
-            Dim TaxableAmount As XmlElement = xmlDoc.CreateElement("cbc:TaxableAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-            TaxableAmount.SetAttribute("currencyID", "SAR")
-            TaxableAmount.InnerText = group.TotalPrice.ToString()
-            taxSubtotalElement.AppendChild(TaxableAmount)
-
-            Dim TaxAmount As XmlElement = xmlDoc.CreateElement("cbc:TaxAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-            TaxAmount.SetAttribute("currencyID", "SAR")
-            TaxAmount.InnerText = group.TaxAmount.ToString()
-            taxSubtotalElement.AppendChild(TaxAmount)
-
-            Dim TaxCategorysub As XmlElement = xmlDoc.CreateElement("cac:TaxCategory", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
-            taxSubtotalElement.AppendChild(TaxCategorysub)
-
-            Dim taxCategoryID As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-            taxCategoryID.SetAttribute("schemeAgencyID", "6")
-            taxCategoryID.SetAttribute("schemeID", "UN/ECE 5305")
-            taxCategoryID.InnerText = group.TaxType
-            TaxCategorysub.AppendChild(taxCategoryID)
-
-            Dim taxCategoryPercent As XmlElement = xmlDoc.CreateElement("cbc:Percent", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-            taxCategoryPercent.InnerText = group.TaxPercent.ToString()
-            TaxCategorysub.AppendChild(taxCategoryPercent)
-
-            ' Handle Tax Exemptions
-            If group.TaxType = "Z" OrElse group.TaxType = "O" Then
-                Dim taxExemptionReasonCode As XmlElement = xmlDoc.CreateElement("cbc:TaxExemptionReasonCode", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-                taxExemptionReasonCode.InnerText = group.TaxExemption
-                TaxCategorysub.AppendChild(taxExemptionReasonCode)
-
-                Dim taxExemptionReason As XmlElement = xmlDoc.CreateElement("cbc:TaxExemptionReason", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-                taxExemptionReason.InnerText = GetZeroTaxExemptionText(taxExemptionReasonCode.InnerText).Description
-                TaxCategorysub.AppendChild(taxExemptionReason)
-            End If
-
-            Dim TaxSchemeSub As XmlElement = xmlDoc.CreateElement("cac:TaxScheme", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
-            TaxCategorysub.AppendChild(TaxSchemeSub)
-
-            Dim TaxSchemeID As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-            TaxSchemeID.SetAttribute("schemeAgencyID", "6")
-            TaxSchemeID.SetAttribute("schemeID", "UN/ECE 5153")
-            TaxSchemeID.InnerText = allowanceChargeData.TaxSchemeID
-            TaxSchemeSub.AppendChild(TaxSchemeID)
-        Next
-
-        ' Total Tax = the sum of all sub-tax values
-        Dim taxTotalElement1 As XmlElement = xmlDoc.CreateElement("cac:TaxTotal", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
-        invoiceElement.AppendChild(taxTotalElement1)
-
-        Dim taxAmountElement1 As XmlElement = xmlDoc.CreateElement("cbc:TaxAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        taxAmountElement1.SetAttribute("currencyID", "SAR")
-        taxAmountElement1.InnerText = allowanceChargeData.TaxAmount.ToString()
-        taxTotalElement1.AppendChild(taxAmountElement1)
-
-        ' LegalMonetaryTotal
-        Dim legalMonetaryTotalElement As XmlElement = xmlDoc.CreateElement("cac:LegalMonetaryTotal", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
-        invoiceElement.AppendChild(legalMonetaryTotalElement)
-
-        Dim LineExtensionAmountElement As XmlElement = xmlDoc.CreateElement("cbc:LineExtensionAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        LineExtensionAmountElement.SetAttribute("currencyID", "SAR")
-        LineExtensionAmountElement.InnerText = allowanceChargeData.TaxExclusiveAmount.ToString()
-        legalMonetaryTotalElement.AppendChild(LineExtensionAmountElement)
-
-        Dim taxExclusiveAmountElement As XmlElement = xmlDoc.CreateElement("cbc:TaxExclusiveAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        taxExclusiveAmountElement.SetAttribute("currencyID", "SAR")
-        taxExclusiveAmountElement.InnerText = allowanceChargeData.LineExtensionAmount
-        legalMonetaryTotalElement.AppendChild(taxExclusiveAmountElement)
-
-        Dim taxInclusiveAmountElement As XmlElement = xmlDoc.CreateElement("cbc:TaxInclusiveAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        taxInclusiveAmountElement.SetAttribute("currencyID", "SAR")
-        taxInclusiveAmountElement.InnerText = allowanceChargeData.TaxInclusiveAmount.ToString()
-        legalMonetaryTotalElement.AppendChild(taxInclusiveAmountElement)
-
-        Dim allowanceTotalAmountElement As XmlElement = xmlDoc.CreateElement("cbc:AllowanceTotalAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        allowanceTotalAmountElement.SetAttribute("currencyID", "SAR")
-        allowanceTotalAmountElement.InnerText = allowanceChargeData.AllowanceTotalAmount.ToString()
-        legalMonetaryTotalElement.AppendChild(allowanceTotalAmountElement)
-
-        Dim PrepaidAmountElement As XmlElement = xmlDoc.CreateElement("cbc:PrepaidAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        PrepaidAmountElement.SetAttribute("currencyID", "SAR")
-        PrepaidAmountElement.InnerText = allowanceChargeData.PrepaidAmount
-        legalMonetaryTotalElement.AppendChild(PrepaidAmountElement)
-
-        Dim payableAmountElement As XmlElement = xmlDoc.CreateElement("cbc:PayableAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        payableAmountElement.SetAttribute("currencyID", "SAR")
-        payableAmountElement.InnerText = allowanceChargeData.PayableAmount.ToString()
-        legalMonetaryTotalElement.AppendChild(payableAmountElement)
-
-        Return invoiceElement
-    End Function
-
-    Private Function CreateInvoiceLineBElement(xmlDoc As XmlDocument, invoiceLineData As InvoiceLineInfoB) As XmlElement
+    Private Function CreateInvoiceLineBElement(xmlDoc As XmlDocument, invoiceLineData As InvoiceLineInfoB, code As String) As XmlElement
         Dim invoiceLineElement As XmlElement = xmlDoc.CreateElement("cac:InvoiceLine", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
 
         ' ID
@@ -1353,8 +1616,35 @@ Public Class InvoiceHelper333
         ' LineExtensionAmount
         Dim lineExtensionAmountElement As XmlElement = xmlDoc.CreateElement("cbc:LineExtensionAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
         lineExtensionAmountElement.SetAttribute("currencyID", "SAR")
-        lineExtensionAmountElement.InnerText = invoiceLineData.LineExtensionAmount.ToString()
+        ' lineExtensionAmountElement.InnerText = Math.Round(invoiceLineData.LineExtensionAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00") TotalPriceAmountAfterDiscount
+        'modify ibrhaim
+        lineExtensionAmountElement.InnerText = Math.Round(invoiceLineData.TotalPriceAmountAfterDiscount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+
         invoiceLineElement.AppendChild(lineExtensionAmountElement)
+
+        ' AllowanceCharge
+        Dim allowanceChargeElement As XmlElement = xmlDoc.CreateElement("cac:AllowanceCharge", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
+
+        ' ChargeIndicator
+        Dim chargeIndicatorElement As XmlElement = xmlDoc.CreateElement("cbc:ChargeIndicator", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        chargeIndicatorElement.InnerText = invoiceLineData.ChargeIndicator.ToString().ToLower()
+        allowanceChargeElement.AppendChild(chargeIndicatorElement)
+
+        ' AllowanceChargeReason
+        Dim allowanceChargeReasonElement As XmlElement = xmlDoc.CreateElement("cbc:AllowanceChargeReason", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        allowanceChargeReasonElement.InnerText = invoiceLineData.AllowanceChargeReason
+        allowanceChargeElement.AppendChild(allowanceChargeReasonElement)
+
+        ' Amount
+        Dim allowanceChargeAmountElement As XmlElement = xmlDoc.CreateElement("cbc:Amount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        allowanceChargeAmountElement.SetAttribute("currencyID", "SAR")
+        '  allowanceChargeAmountElement.InnerText = Math.Round(invoiceLineData.AllowanceChargeAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+
+        'Modfiy Ibrahim
+        allowanceChargeAmountElement.InnerText = Math.Round(invoiceLineData.TotalRowDiscount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+
+        allowanceChargeElement.AppendChild(allowanceChargeAmountElement)
+        invoiceLineElement.AppendChild(allowanceChargeElement)
 
         ' TaxTotal
         Dim taxTotalElement As XmlElement = xmlDoc.CreateElement("cac:TaxTotal", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
@@ -1363,13 +1653,17 @@ Public Class InvoiceHelper333
         ' TaxAmount
         Dim taxAmountElement As XmlElement = xmlDoc.CreateElement("cbc:TaxAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
         taxAmountElement.SetAttribute("currencyID", "SAR")
-        taxAmountElement.InnerText = invoiceLineData.TaxAmount.ToString()
+        '  taxAmountElement.InnerText = Math.Round(invoiceLineData.TaxAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00") TaxAmountLine
+
+        'Modify Ibrahim
+        taxAmountElement.InnerText = Math.Round(invoiceLineData.TaxAmountLine, 2, MidpointRounding.AwayFromZero).ToString("0.00")
+
         taxTotalElement.AppendChild(taxAmountElement)
 
         ' RoundingAmount
         Dim roundingAmountElement As XmlElement = xmlDoc.CreateElement("cbc:RoundingAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
         roundingAmountElement.SetAttribute("currencyID", "SAR")
-        roundingAmountElement.InnerText = invoiceLineData.RoundingAmount.ToString()
+        roundingAmountElement.InnerText = Math.Round(invoiceLineData.RoundingAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
         taxTotalElement.AppendChild(roundingAmountElement)
 
         ' Item
@@ -1378,14 +1672,21 @@ Public Class InvoiceHelper333
 
         ' Name
         Dim itemNameElement As XmlElement = xmlDoc.CreateElement("cbc:Name", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        itemNameElement.InnerText = invoiceLineData.ItemName
+        itemNameElement.InnerText = invoiceLineData.ItemName.ToString()
+
         itemElement.AppendChild(itemNameElement)
 
         Dim ClassifiedTaxCategory As XmlElement = xmlDoc.CreateElement("cac:ClassifiedTaxCategory", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
         itemElement.AppendChild(ClassifiedTaxCategory)
 
+        ' Dim taxCategoryID As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        ' taxCategoryID.InnerText = invoiceLineData.TaxCategoryID code
+        ' ClassifiedTaxCategory.AppendChild(taxCategoryID)
+
+        'Modify Ibrahim
+
         Dim taxCategoryID As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        taxCategoryID.InnerText = invoiceLineData.TaxCategoryID
+        taxCategoryID.InnerText = code
         ClassifiedTaxCategory.AppendChild(taxCategoryID)
 
         Dim taxCategoryPercent As XmlElement = xmlDoc.CreateElement("cbc:Percent", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
@@ -1405,7 +1706,7 @@ Public Class InvoiceHelper333
         ' PriceAmount
         Dim priceAmountElement As XmlElement = xmlDoc.CreateElement("cbc:PriceAmount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
         priceAmountElement.SetAttribute("currencyID", "SAR")
-        priceAmountElement.InnerText = invoiceLineData.PriceAmount.ToString()
+        priceAmountElement.InnerText = Math.Round(invoiceLineData.PriceAmount, 2, MidpointRounding.AwayFromZero).ToString("0.00")
         priceElement.AppendChild(priceAmountElement)
 
         ' BaseQuantity
@@ -1414,26 +1715,9 @@ Public Class InvoiceHelper333
         baseQuantityElement.InnerText = "1"
         priceElement.AppendChild(baseQuantityElement)
 
-        ' AllowanceCharge
-        Dim allowanceChargeElement As XmlElement = xmlDoc.CreateElement("cac:AllowanceCharge", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
 
-        ' ChargeIndicator
-        Dim chargeIndicatorElement As XmlElement = xmlDoc.CreateElement("cbc:ChargeIndicator", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        chargeIndicatorElement.InnerText = invoiceLineData.ChargeIndicator.ToString().ToLower()
-        allowanceChargeElement.AppendChild(chargeIndicatorElement)
 
-        ' AllowanceChargeReason
-        Dim allowanceChargeReasonElement As XmlElement = xmlDoc.CreateElement("cbc:AllowanceChargeReason", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        allowanceChargeReasonElement.InnerText = invoiceLineData.AllowanceChargeReason
-        allowanceChargeElement.AppendChild(allowanceChargeReasonElement)
-
-        ' Amount
-        Dim allowanceChargeAmountElement As XmlElement = xmlDoc.CreateElement("cbc:Amount", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        allowanceChargeAmountElement.SetAttribute("currencyID", "SAR")
-        allowanceChargeAmountElement.InnerText = invoiceLineData.AllowanceChargeAmount.ToString()
-        allowanceChargeElement.AppendChild(allowanceChargeAmountElement)
-
-        priceElement.AppendChild(allowanceChargeElement)
+        '   priceElement.AppendChild(allowanceChargeElement)
         invoiceLineElement.AppendChild(priceElement)
 
         Return invoiceLineElement
@@ -1726,8 +2010,10 @@ Public Class InvoiceHelper333
 
     Public Function GroupAndSumItems(items As List(Of ItemInfo)) As List(Of ItemTaxGroupInfo)
         For Each itemInfo As ItemInfo In items
-            Debug.WriteLine($"Item Code: {itemInfo.ItemCode}, Description: {itemInfo.ItemDesc}, Quantity: {itemInfo.Qty}, Unit Price: {itemInfo.ItemPriceLC}, Total Discount: {itemInfo.TotalDiscountLC}, Tax Amount: {itemInfo.TaxAmount}, Total Price: {itemInfo.TotalPriceLC}, Tax Percent: {itemInfo.TaxPerc}, Total Price After Tax: {itemInfo.ItemTotalPriceAfterTax}, Tax Exemption: {itemInfo.TaxExemption}")
+            Debug.WriteLine($"Item Code: {itemInfo.ItemCode}, Description: {itemInfo.ItemDesc}, Quantity: {itemInfo.Qty}, Unit Price: {itemInfo.ItemPriceLC}, Total Discount: {itemInfo.TotalDiscountLC}, Tax Amount: {itemInfo.TaxAmount}, Total Price: {itemInfo.TotalPriceLC}, Tax Percent: {itemInfo.TaxPerc}, Total Price After Tax: {itemInfo.ItemTotalPriceAfterTax}, Tax Exemption: {itemInfo.TaxExemption} ,Header Disount: {itemInfo.HeaderDisount}")
         Next
+
+        Dim Count As Int16 = 0
 
         Dim result As List(Of ItemTaxGroupInfo) = (
         From item In items
@@ -1735,21 +2021,27 @@ Public Class InvoiceHelper333
         Select New ItemTaxGroupInfo With {
             .TaxPercent = TaxPerc,
             .TaxExemption = TaxExemption,
-            .TaxAmount = Group.Sum(Function(i) i.TaxAmount),
+             .TaxAmount = Group.Sum(Function(i) i.TaxAmount),
             .TotalPrice = Group.Sum(Function(i) i.TotalPriceLC),
+            .TotalPriceAmountAfterDiscount = Group.Sum(Function(i) i.TotalPriceAmountAfterDiscount),
             .TotalPriceAfterTax = Group.Sum(Function(i) i.ItemTotalPriceAfterTax),
             .TotalDiscount = Group.Sum(Function(i) i.TotalDiscountLC),
+            .HeaderDisount = Group.Sum(Function(i) i.HeaderDisount), ' modify
             .TaxType = If(TaxPerc = 0.0, "Z", "S")
         }
     ).ToList()
 
         For Each group As ItemTaxGroupInfo In result
-            group.TaxAmount = Math.Round(group.TaxAmount, 2, MidpointRounding.AwayFromZero)
-            group.TotalPrice = Math.Round(group.TotalPrice, 2, MidpointRounding.AwayFromZero)
-            group.TotalPriceAfterTax = Math.Round(group.TotalPriceAfterTax, 2, MidpointRounding.AwayFromZero)
-            group.TotalDiscount = Math.Round(group.TotalDiscount, 2, MidpointRounding.AwayFromZero)
+            group.TaxAmount = group.TaxAmount
+            group.TotalPrice = group.TotalPrice
+            group.TotalPriceAmountAfterDiscount = group.TotalPriceAmountAfterDiscount
+            group.TotalPriceAfterTax = group.TotalPriceAfterTax
+            group.TotalDiscount = group.TotalDiscount
+            group.HeaderDisount = group.HeaderDisount ' modify
+            group.ID = Count + 1 'Modfiy 
+            Count += 1
 
-            Debug.WriteLine($">>>>> Group: Tax Percent: {group.TaxPercent}, Tax Exemption: {group.TaxExemption}, Total Tax: {group.TaxAmount}, Total Price: {group.TotalPrice}, Total Price After Tax: {group.TotalPriceAfterTax}, Discount: {group.TotalDiscount}")
+            Debug.WriteLine($">>>>> Group: Tax Percent: {group.TaxPercent}, Tax Exemption: {group.TaxExemption}, Total Tax: {group.TaxAmount}, Total Price: {group.TotalPrice}, Total Price After Tax: {group.TotalPriceAfterTax}, Discount: {group.TotalDiscount} ,Header Disount: {group.HeaderDisount}")
         Next
 
         Return result
@@ -1774,11 +2066,39 @@ Public Class InvoiceHelper333
         {"VATEX-SA-MLTRY", ("Supply of qualified military goods", "Z")}
     }
 
-        If exemptions.ContainsKey(zeroTaxExemptionCode) Then
-            Return exemptions(zeroTaxExemptionCode)
+        If exemptions.ContainsKey(zeroTaxExemptionCode.Trim()) Then
+            Return exemptions(zeroTaxExemptionCode.Trim())
         Else
             Return (Nothing, Nothing)
         End If
+    End Function
+
+    Private Function GetClientID(sajayaClientID As String) As String
+        Const query As String = "
+    SELECT TOP 1 Clients.ClientID
+    FROM (
+          SELECT SajayaClients.ClientID
+          FROM SajayaClients
+          INNER JOIN ClientProducts ON SajayaClients.ClientID = ClientProducts.ClientID
+          WHERE SajayaClients.SajayaClientID = @SajayaClientID AND ClientProducts.ProductID = 0
+         ) AS QSajayaClient
+    INNER JOIN Clients ON QSajayaClient.ClientID = Clients.ClientID"
+
+        Using conn As New SqlConnection("Data Source=api.sajaya.com,19798;Initial Catalog=SajayaMobile;User ID=sa;Password=S@jaya2022;TrustServerCertificate=true;")
+            Using cmd As New SqlCommand(query, conn)
+                cmd.Parameters.AddWithValue("@SajayaClientID", sajayaClientID)
+
+                conn.Open()
+
+                ' استخدم ExecuteReader للحصول على البيانات
+                Using reader As SqlDataReader = cmd.ExecuteReader()
+                    reader.Read()
+                    ' إرجاع قيمة ClientID من السطر الأول
+                    Return reader("ClientID").ToString()
+
+                End Using
+            End Using
+        End Using
     End Function
 
     Function ValidateJson(jsonString As String, Optional IsWarnings As Boolean = False) As Boolean
@@ -1802,6 +2122,23 @@ Public Class InvoiceHelper333
             Return Not filteredErrors.Any() AndAlso Not warningsArray.Any()
         End If
     End Function
+
+    Function UpdateVoucherData(fiscalYearId As Integer, voucherTypeId As Integer, voucherNo As Integer, newUUID As String)
+        Using connection As New SqlConnection(_clientConnectionString)
+            connection.Open()
+
+            Dim updateQuery As String = UpdateUUIDDataQuery(newUUID)
+            Using command As New SqlCommand(updateQuery, connection)
+                command.Parameters.AddWithValue("@fiscalYearId", fiscalYearId)
+                command.Parameters.AddWithValue("@voucherTypeId", voucherTypeId)
+                command.Parameters.AddWithValue("@voucherNo", voucherNo)
+
+                command.ExecuteNonQuery()
+            End Using
+        End Using
+    End Function
+
+
 #End Region ' "HelperFunctions"
 
 #Region "SQL Statments"
@@ -1848,102 +2185,144 @@ Public Class InvoiceHelper333
 
     Function GetInvoiceInfoQuery() As String
         Return $"
-SELECT QHeaderInfo.InvType, T_Customers.CustomerNo AS ByerID, CAST(@CompanyID AS VARCHAR(50)) + '_'  + QHeaderInfo.VoucherID AS VoucherID, T_Customers.NationalNo AS ByerNationalNo, T_Customers.CommercialRecordNo AS ByerCommRegNo, 
-                  ISNULL(T_Customers.DeliverAddressNameE, T_Customers.DeliverAddressNameA) AS ByerStreetName, ISNULL(T_Customers.AddressNameE, T_Customers.AddressNameA) AS ByerAdditionalStreetName, 
-                  T_SysAddresses.Note AS ByerBuildingNo, ISNULL(T_SysAddresses.CityNameE, T_SysAddresses.CityNameA) AS byerCityName, T_SysAddresses.Zip AS ByerPoBOX, ISNULL(T_SysAddresses.CountryNameE, 
-                  T_SysAddresses.CountryNameA) AS ByerCountryName, ISNULL(T_SysAddresses.AreaNameE, T_SysAddresses.AreaNameA) AS ByerAreaName, ISNULL(T_SysAddresses.CountryCodeE, T_SysAddresses.CountryCodeA) 
-                  AS ByerCountryCode, CASE WHEN IsNull(IsWalkin, 0) = 0 THEN ISNULL(T_Customers.CustNameE, T_Customers.CustNameA) ELSE ISNULL(T_Customers.companyNameE, T_Customers.companyNameA) END AS BuyerName, 
-                  T_Customers.TaxNo AS ByerTaxNo, QHeaderInfo.VoucherDate, QHeaderInfo.DeliveryDate, QHeaderInfo.DueDate, QHeaderInfo.TimeStamp, QHeaderInfo.NetInvoiceLC, QHeaderInfo.TotalDiscountLC, QHeaderInfo.TotalExpencesLC, 
-                  QHeaderInfo.TotalTaxLC, QHeaderInfo.TotalBeforeTaxLC, QHeaderInfo.TotalInvoiceLC, QHeaderInfo.InvoiceDesc, QHeaderInfo.Note, 100 * (CASE WHEN TotalBeforeTaxLC = 0 THEN 0 ELSE ROUND(TotalTaxLC / TotalBeforeTaxLC, 2) 
-                  END) AS TaxCategoryPercent, ISNULL(T_Customers.IsTaxable, 0) AS IsTaxable
-FROM     (SELECT CASE WHEN CatId <> 10 THEN 0 ELSE 2 END AS InvType, StrVoucherHeader.FiscalYearID, StrVoucherHeader.VoucherTypeID, StrVoucherHeader.VoucherNo, StrVoucherHeader.CustNo, 
-                                    StrVoucherHeader.VoucherDateTime AS VoucherDate, StrVoucherHeader.DeliveryDate, StrVoucherHeader.DueDate, StrVoucherHeader.TimeStamp, StrVoucherHeader.NetInvoiceLC, StrVoucherHeader.TotalDiscountLC, 
-                                    StrVoucherHeader.TotalExpencesLC, StrVoucherHeader.TotalTaxLC, StrVoucherHeader.TotalBeforeTaxLC, StrVoucherHeader.TotalInvoiceLC, StrVoucherHeader.Note, StrVoucherHeader.InvoiceDesc, 
-                                    StrVoucherHeader.VoucherID, T_SYSVoucherTypes.CatID, StrVoucherHeader.DeliveryAddress
-                  FROM      StrVoucherHeader INNER JOIN
-                                    T_SYSVoucherTypes ON StrVoucherHeader.VoucherTypeID = T_SYSVoucherTypes.VoucherTypeID
-                  WHERE   (StrVoucherHeader.FiscalYearID = @FiscalYearID) AND (StrVoucherHeader.VoucherTypeID = @VoucherTypeID) AND (StrVoucherHeader.VoucherNo = @VoucherNo)
-                  UNION ALL
-                  SELECT CASE WHEN CatId = 11 THEN 0 ELSE 1 END AS InvType, AstVoucherHeader.FiscalYearID, AstVoucherHeader.VoucherTypeID, AstVoucherHeader.VoucherNo, (CASE WHEN isnull(walkinID, 0) = 0 THEN CONVERT(varchar(25), 
-                                    CustID, 0) ELSE (CONVERT(varchar(25), CustID, 0) + '-') + CONVERT(varchar(25), walkinID, 0) END) AS CustNo, DATEADD(Second, (DATEPART(Second, AstVoucherHeader.TimeStamp) + DATEPART(Minute, 
-                                    AstVoucherHeader.TimeStamp) * 60) + DATEPART(Hour, AstVoucherHeader.TimeStamp) * 3600, CAST(AstVoucherHeader.VoucherDate AS DATETIME)) AS VoucherDate, AstVoucherHeader.DeliveryDate, 
-                                    AstVoucherHeader.DueDate, AstVoucherHeader.TimeStamp, AstVoucherHeader.NetInvoiceLC, AstVoucherHeader.TotalDiscountLC, AstVoucherHeader.TotalExpencesLC, AstVoucherHeader.TotalTaxLC, 
-                                    AstVoucherHeader.TotalBeforeTaxLC, AstVoucherHeader.TotalInvoiceLC, AstVoucherHeader.Note, AstVoucherHeader.VoucherDesc AS InvoiceDesc, AstVoucherHeader.VoucherID, T_SYSVoucherTypes_2.CatID, 
-                                    AstVoucherHeader.DeliveryAddress
-                  FROM     AstVoucherHeader INNER JOIN
-                                    T_SYSVoucherTypes AS T_SYSVoucherTypes_2 ON AstVoucherHeader.VoucherTypeID = T_SYSVoucherTypes_2.VoucherTypeID
-                  WHERE  (AstVoucherHeader.FiscalYearID = @FiscalYearID) AND (AstVoucherHeader.VoucherTypeID = @VoucherTypeID) AND (AstVoucherHeader.VoucherNo = @VoucherNo)
-                  UNION ALL
-                  SELECT CASE WHEN CatId = 8 THEN 0 ELSE (CASE WHEN CatID = 6 THEN 2 ELSE 1 END) END AS InvType, FiscalYearID, VoucherTypeID, VoucherNo, CustNo, DATEADD(Second, (DATEPART(Second, TimeStamp) + DATEPART(Minute, 
-                                    TimeStamp) * 60) + DATEPART(Hour, TimeStamp) * 3600, CAST(VoucherDate AS DATETIME)) AS VoucherDate, DeliveryDate, DueDate, TimeStamp, ISNULL(NetInvoice, 0) * ExchangePrice AS NetInvoice, ISNULL(TotalDiscount, 0) 
-                                    * ExchangePrice AS TotalDiscount, ISNULL(TotalExpense, 0) * ExchangePrice AS TotalExpense, ISNULL(TotalTax, 0) * ExchangePrice AS TotalTax, ISNULL(TotalBeforTax, 0) * ExchangePrice AS TotalBeforTax, 
-                                    ISNULL(TotalInvoice, 0) * ExchangePrice AS TotalInvoice, Note, InvoiceDesc, VoucherID, CatID, DeliveryAddress
-                  FROM     (SELECT RecInvoiceHeader.FiscalYearID, RecInvoiceHeader.InvoiceTypeID AS VoucherTypeID, RecInvoiceHeader.InvoiceNo AS VoucherNo, (CASE WHEN isnull(walkinID, 0) = 0 THEN CONVERT(varchar(25), CustID, 0) 
-                                                      ELSE (CONVERT(varchar(25), CustID, 0) + '-') + CONVERT(varchar(25), walkinID, 0) END) AS CustNo, RecInvoiceHeader.InvoiceDate AS VoucherDate, RecInvoiceHeader.InvoiceDate AS DeliveryDate, 
-                                                      RecInvoiceHeader.DueDate, RecInvoiceHeader.TimeStamp, RecInvoiceHeader.NetInvoice, RecInvoiceHeader.TotalDiscount, 0 AS TotalExpense, RecInvoiceHeader.TotalTax, 
-                                                      RecInvoiceHeader.TotalInvoice - ISNULL(RecInvoiceHeader.TotalTax, 0) AS TotalBeforTax, RecInvoiceHeader.TotalInvoice, RecInvoiceHeader.Note, RecInvoiceHeader.InvoiceDesc, RecInvoiceHeader.VoucherID, 
-                                                      T_SYSVoucherTypes_1.CatID, (CASE WHEN CalculatType = 1 THEN 1 / ExchangeRate ELSE ExchangeRate END) AS ExchangePrice, RecInvoiceHeader.DeliveryAddress
-                                    FROM      RecInvoiceHeader INNER JOIN
-                                                      T_SYSVoucherTypes AS T_SYSVoucherTypes_1 ON RecInvoiceHeader.InvoiceTypeID = T_SYSVoucherTypes_1.VoucherTypeID
-                                    WHERE   (RecInvoiceHeader.FiscalYearID = @FiscalYearID) AND (RecInvoiceHeader.InvoiceTypeID = @VoucherTypeID) AND (RecInvoiceHeader.InvoiceNo = @VoucherNo)) AS QFinHeader
-                  UNION ALL
-                  SELECT CASE WHEN CatId <> 6 THEN 0 ELSE 2 END AS InvType, FiscalYearID, VoucherTypeID, VoucherNo, CustNo, DATEADD(Second, (DATEPART(Second, TimeStamp) + DATEPART(Minute, TimeStamp) * 60) + DATEPART(Hour, 
-                                    TimeStamp) * 3600, CAST(VoucherDate AS DATETIME)) AS VoucherDate, DeliveryDate, DueDate, TimeStamp, ISNULL(NetInvoice, 0) * ExchangePrice AS NetInvoice, ISNULL(TotalDiscount, 0) * ExchangePrice AS TotalDiscount, 
-                                    ISNULL(TotalExpense, 0) * ExchangePrice AS TotalExpense, ISNULL(TotalTax, 0) * ExchangePrice AS TotalTax, ISNULL(TotalBeforTax, 0) * ExchangePrice AS TotalBeforTax, ISNULL(TotalInvoice, 0) 
-                                    * ExchangePrice AS TotalInvoice, Note, VoucherDesc, VoucherID, CatID, DeliveryAddress
-                  FROM     (SELECT FiscalYearID, VoucherTypeID, VoucherNo, CustNo, VoucherDate, DeliveryDate, DueDate, TimeStamp, NetInvoice, TotalDiscount, TotalExpense, TotalTax, TotalBeforTax, TotalInvoice, Note, VoucherDesc, VoucherID, 
-                                                      CatID, ExchangePrice, DeliveryAddress
-                                    FROM      (SELECT SchRegistrationVoucherHeader.FiscalYearID, SchRegistrationVoucherHeader.VoucherTypeID, SchRegistrationVoucherHeader.VoucherNo, (CASE WHEN isnull(walkinID, 0) 
-                                                                         = 0 THEN (CASE WHEN isnull(SchRegistrationVoucherHeader.CustID, 0) = 0 THEN CONVERT(varchar(25), T_Customers.CustID, 0) ELSE (CONVERT(varchar(25), SchRegistrationVoucherHeader.CustID, 0)) END) 
-                                                                         ELSE (CONVERT(varchar(25), SchRegistrationVoucherHeader.CustID, 0) + '-') + CONVERT(varchar(25), walkinID, 0) END) AS CustNo, SchRegistrationVoucherHeader.VoucherDate, 
-                                                                         SchRegistrationVoucherHeader.VoucherDate AS DeliveryDate, SchRegistrationVoucherHeader.DueDate, SchRegistrationVoucherHeader.TimeStamp, SchRegistrationVoucherHeader.NetInvoice, 
-                                                                         SchRegistrationVoucherHeader.TotalDiscount, 0 AS TotalExpense, SchRegistrationVoucherHeader.TotalTax, SchRegistrationVoucherHeader.TotalInvoice - ISNULL(SchRegistrationVoucherHeader.TotalTax, 0) 
-                                                                         AS TotalBeforTax, SchRegistrationVoucherHeader.TotalInvoice, SchRegistrationVoucherHeader.Note, SchRegistrationVoucherHeader.VoucherDesc, SchRegistrationVoucherHeader.VoucherID, 
-                                                                         T_SYSVoucherTypes_1.CatID, (CASE WHEN CalculateType = 1 THEN 1 / ExchangeRate ELSE ExchangeRate END) AS ExchangePrice, T_Customers.DeliveryAddress
-                                                       FROM      SchRegistrationVoucherHeader INNER JOIN
-                                                                         T_SYSVoucherTypes AS T_SYSVoucherTypes_1 ON SchRegistrationVoucherHeader.VoucherTypeID = T_SYSVoucherTypes_1.VoucherTypeID INNER JOIN
-                                                                         SchRegistrationVoucherDetails ON SchRegistrationVoucherHeader.FiscalYearID = SchRegistrationVoucherDetails.FiscalYearID AND 
-                                                                         SchRegistrationVoucherHeader.VoucherTypeID = SchRegistrationVoucherDetails.VoucherTypeID AND 
-                                                                         SchRegistrationVoucherHeader.VoucherNo = SchRegistrationVoucherDetails.VoucherNo LEFT OUTER JOIN
-                                                                         T_Customers RIGHT OUTER JOIN
-                                                                         SchGuardians ON T_Customers.CustID = SchGuardians.CustNo ON SchRegistrationVoucherDetails.GuardianID = SchGuardians.GuardianID
-                                                       WHERE   (SchRegistrationVoucherHeader.FiscalYearID = @FiscalYearID) AND (SchRegistrationVoucherHeader.VoucherTypeID = @VoucherTypeID) AND (SchRegistrationVoucherHeader.VoucherNo = @VoucherNo) AND
-                                                                          (T_SYSVoucherTypes_1.CatID = 7)
-                                                       UNION ALL
-                                                       SELECT SchRegistrationVoucherHeader.FiscalYearID, SchRegistrationVoucherHeader.VoucherTypeID, SchRegistrationVoucherHeader.VoucherNo, (CASE WHEN isnull(walkinID, 0) = 0 THEN CONVERT(varchar(25), 
-                                                                         SchRegistrationVoucherHeader.CustID, 0) ELSE (CONVERT(varchar(25), SchRegistrationVoucherHeader.CustID, 0) + '-') + CONVERT(varchar(25), walkinID, 0) END) AS CustNo, 
-                                                                         SchRegistrationVoucherHeader.VoucherDate, SchRegistrationVoucherHeader.VoucherDate AS DeliveryDate, SchRegistrationVoucherHeader.DueDate, SchRegistrationVoucherHeader.TimeStamp, 
-                                                                         SchRegistrationVoucherHeader.NetInvoice, SchRegistrationVoucherHeader.TotalDiscount, 0 AS TotalExpense, SchRegistrationVoucherHeader.TotalTax, 
-                                                                         SchRegistrationVoucherHeader.TotalInvoice - ISNULL(SchRegistrationVoucherHeader.TotalTax, 0) AS TotalBeforTax, SchRegistrationVoucherHeader.TotalInvoice, SchRegistrationVoucherHeader.Note, 
-                                                                         SchRegistrationVoucherHeader.VoucherDesc, SchRegistrationVoucherHeader.VoucherID, T_SYSVoucherTypes_1.CatID, (CASE WHEN CalculateType = 1 THEN 1 / ExchangeRate ELSE ExchangeRate END) 
-                                                                         AS ExchangePrice, T_Customers.DeliveryAddress
-                                                       FROM     SchRegistrationVoucherHeader INNER JOIN
-                                                                         T_SYSVoucherTypes AS T_SYSVoucherTypes_1 ON SchRegistrationVoucherHeader.VoucherTypeID = T_SYSVoucherTypes_1.VoucherTypeID INNER JOIN
-                                                                         T_Customers ON SchRegistrationVoucherHeader.CustID = T_Customers.CustID
-                                                       WHERE  (SchRegistrationVoucherHeader.FiscalYearID = @FiscalYearID) AND (SchRegistrationVoucherHeader.VoucherTypeID = @VoucherTypeID) AND (SchRegistrationVoucherHeader.VoucherNo = @VoucherNo) AND 
-                                                                         (T_SYSVoucherTypes_1.CatID IN (1, 6))) AS QSchool) AS QSchHeader) AS QHeaderInfo INNER JOIN
-                      (SELECT VoucherID, CASE WHEN IsNull(Vdebit, 0) = 0 THEN 1 ELSE 0 END AS IsCreditNote
-                       FROM      SysCustomerTrans) AS QCreditInfo ON QHeaderInfo.VoucherID = QCreditInfo.VoucherID LEFT OUTER JOIN
-                  T_SysAddresses ON QHeaderInfo.DeliveryAddress = T_SysAddresses.AddressID LEFT OUTER JOIN
-                  T_Customers ON QHeaderInfo.CustNo = T_Customers.CustomerNo
+SELECT        QHeaderInfo.InvType, T_Customers_1.CustomerNo AS ByerID, CAST(@CompanyID AS VARCHAR(50)) + '_' + QHeaderInfo.VoucherID AS VoucherID, T_Customers_1.NationalNo AS ByerNationalNo, 
+                         T_Customers_1.CommercialRecordNo AS ByerCommRegNo, ISNULL(T_Customers_1.DeliverAddressNameE, T_Customers_1.DeliverAddressNameA) AS ByerStreetName, ISNULL(T_Customers_1.AddressNameE, 
+                         T_Customers_1.AddressNameA) AS ByerAdditionalStreetName, T_SysAddresses.Note AS ByerBuildingNo, ISNULL(T_SysAddresses.CityNameE, T_SysAddresses.CityNameA) AS byerCityName, 
+                         T_SysAddresses.Zip AS ByerPoBOX, ISNULL(T_SysAddresses.CountryNameE, T_SysAddresses.CountryNameA) AS ByerCountryName, ISNULL(T_SysAddresses.AreaNameE, T_SysAddresses.AreaNameA) AS ByerAreaName, 
+                         ISNULL(T_SysAddresses.CountryCodeE, T_SysAddresses.CountryCodeA) AS ByerCountryCode, CASE WHEN IsNull(IsWalkin, 0) = 0 THEN ISNULL(T_Customers_1.CustNameE, T_Customers_1.CustNameA) 
+                         ELSE ISNULL(T_Customers_1.companyNameE, T_Customers_1.companyNameA) END AS BuyerName, T_Customers_1.TaxNo AS ByerTaxNo, QHeaderInfo.VoucherDate, QHeaderInfo.DeliveryDate, QHeaderInfo.DueDate, 
+                         QHeaderInfo.TimeStamp, QHeaderInfo.NetInvoiceLC, QHeaderInfo.TotalDiscountLC, QHeaderInfo.TotalExpencesLC, QHeaderInfo.TotalTaxLC, QHeaderInfo.TotalBeforeTaxLC, QHeaderInfo.TotalInvoiceLC, 
+                         QHeaderInfo.InvoiceDesc, QHeaderInfo.Note, 100 * (CASE WHEN TotalBeforeTaxLC = 0 THEN 0 ELSE ROUND(TotalTaxLC / TotalBeforeTaxLC, 2) END) AS TaxCategoryPercent, ISNULL(T_Customers_1.IsTaxable, 0) AS IsTaxable,
+                          T_SYSVoucherTypes_3.CatID, T_SYSVoucherTypes_3.CatNameA, T_SYSVoucherTypes_3.CatNameE, T_SYSVoucherTypes_3.ModuleID
+FROM            (SELECT        CASE WHEN CatId <> 10 THEN 0 ELSE 2 END AS InvType, StrVoucherHeader.FiscalYearID, StrVoucherHeader.VoucherTypeID, StrVoucherHeader.VoucherNo, StrVoucherHeader.CustNo, 
+                                                    StrVoucherHeader.VoucherDateTime AS VoucherDate, StrVoucherHeader.DeliveryDate, StrVoucherHeader.DueDate, StrVoucherHeader.TimeStamp, StrVoucherHeader.NetInvoiceLC, 
+                                                    StrVoucherHeader.TotalDiscountLC, StrVoucherHeader.TotalExpencesLC, StrVoucherHeader.TotalTaxLC, StrVoucherHeader.TotalBeforeTaxLC, StrVoucherHeader.TotalInvoiceLC, StrVoucherHeader.Note, 
+                                                    StrVoucherHeader.InvoiceDesc, StrVoucherHeader.VoucherID, T_SYSVoucherTypes.CatID, StrVoucherHeader.DeliveryAddress
+                          FROM            StrVoucherHeader INNER JOIN
+                                                    T_SYSVoucherTypes ON StrVoucherHeader.VoucherTypeID = T_SYSVoucherTypes.VoucherTypeID
+                          WHERE        (StrVoucherHeader.FiscalYearID = @FiscalYearID) AND (StrVoucherHeader.VoucherTypeID = @VoucherTypeID) AND (StrVoucherHeader.VoucherNo = @VoucherNo)
+                          UNION ALL
+                          SELECT        CASE WHEN CatId = 11 THEN 0 ELSE 1 END AS InvType, AstVoucherHeader.FiscalYearID, AstVoucherHeader.VoucherTypeID, AstVoucherHeader.VoucherNo, (CASE WHEN isnull(walkinID, 0) 
+                                                   = 0 THEN CONVERT(varchar(25), CustID, 0) ELSE (CONVERT(varchar(25), CustID, 0) + '-') + CONVERT(varchar(25), walkinID, 0) END) AS CustNo, DATEADD(Second, (DATEPART(Second, AstVoucherHeader.TimeStamp) 
+                                                   + DATEPART(Minute, AstVoucherHeader.TimeStamp) * 60) + DATEPART(Hour, AstVoucherHeader.TimeStamp) * 3600, CAST(AstVoucherHeader.VoucherDate AS DATETIME)) AS VoucherDate, 
+                                                   AstVoucherHeader.DeliveryDate, AstVoucherHeader.DueDate, AstVoucherHeader.TimeStamp, AstVoucherHeader.NetInvoiceLC, AstVoucherHeader.TotalDiscountLC, AstVoucherHeader.TotalExpencesLC, 
+                                                   AstVoucherHeader.TotalTaxLC, AstVoucherHeader.TotalBeforeTaxLC, AstVoucherHeader.TotalInvoiceLC, AstVoucherHeader.Note, AstVoucherHeader.VoucherDesc AS InvoiceDesc, AstVoucherHeader.VoucherID, 
+                                                   T_SYSVoucherTypes_2.CatID, AstVoucherHeader.DeliveryAddress
+                          FROM            AstVoucherHeader INNER JOIN
+                                                   T_SYSVoucherTypes AS T_SYSVoucherTypes_2 ON AstVoucherHeader.VoucherTypeID = T_SYSVoucherTypes_2.VoucherTypeID
+                          WHERE        (AstVoucherHeader.FiscalYearID = @FiscalYearID) AND (AstVoucherHeader.VoucherTypeID = @VoucherTypeID) AND (AstVoucherHeader.VoucherNo = @VoucherNo)
+                          UNION ALL
+                          SELECT        CASE WHEN CatId = 8 THEN 0 ELSE (CASE WHEN CatID = 6 THEN 2 ELSE 1 END) END AS InvType, FiscalYearID, VoucherTypeID, VoucherNo, CustNo, DATEADD(Second, (DATEPART(Second, TimeStamp) 
+                                                   + DATEPART(Minute, TimeStamp) * 60) + DATEPART(Hour, TimeStamp) * 3600, CAST(VoucherDate AS DATETIME)) AS VoucherDate, DeliveryDate, DueDate, TimeStamp, ISNULL(NetInvoice, 0) 
+                                                   * ExchangePrice AS NetInvoice, ISNULL(TotalDiscount, 0) * ExchangePrice AS TotalDiscount, ISNULL(TotalExpense, 0) * ExchangePrice AS TotalExpense, ISNULL(TotalTax, 0) * ExchangePrice AS TotalTax, 
+                                                   ISNULL(TotalBeforTax, 0) * ExchangePrice AS TotalBeforTax, ISNULL(TotalInvoice, 0) * ExchangePrice AS TotalInvoice, Note, InvoiceDesc, VoucherID, CatID, DeliveryAddress
+                          FROM            (SELECT        RecInvoiceHeader.FiscalYearID, RecInvoiceHeader.InvoiceTypeID AS VoucherTypeID, RecInvoiceHeader.InvoiceNo AS VoucherNo, (CASE WHEN isnull(walkinID, 0) = 0 THEN CONVERT(varchar(25), 
+                                                                              CustID, 0) ELSE (CONVERT(varchar(25), CustID, 0) + '-') + CONVERT(varchar(25), walkinID, 0) END) AS CustNo, RecInvoiceHeader.InvoiceDate AS VoucherDate, 
+                                                                              RecInvoiceHeader.InvoiceDate AS DeliveryDate, RecInvoiceHeader.DueDate, RecInvoiceHeader.TimeStamp, RecInvoiceHeader.NetInvoice, RecInvoiceHeader.TotalDiscount, 0 AS TotalExpense, 
+                                                                              RecInvoiceHeader.TotalTax, RecInvoiceHeader.TotalInvoice - ISNULL(RecInvoiceHeader.TotalTax, 0) AS TotalBeforTax, RecInvoiceHeader.TotalInvoice, RecInvoiceHeader.Note, 
+                                                                              RecInvoiceHeader.InvoiceDesc, RecInvoiceHeader.VoucherID, T_SYSVoucherTypes_1.CatID, (CASE WHEN CalculatType = 1 THEN 1 / ExchangeRate ELSE ExchangeRate END) AS ExchangePrice, 
+                                                                              RecInvoiceHeader.DeliveryAddress
+                                                    FROM            RecInvoiceHeader INNER JOIN
+                                                                              T_SYSVoucherTypes AS T_SYSVoucherTypes_1 ON RecInvoiceHeader.InvoiceTypeID = T_SYSVoucherTypes_1.VoucherTypeID
+                                                    WHERE        (RecInvoiceHeader.FiscalYearID = @FiscalYearID) AND (RecInvoiceHeader.InvoiceTypeID = @VoucherTypeID) AND (RecInvoiceHeader.InvoiceNo = @VoucherNo)) AS QFinHeader
+                          UNION ALL
+                          SELECT        CASE WHEN CatId <> 6 THEN 0 ELSE 2 END AS InvType, FiscalYearID, VoucherTypeID, VoucherNo, CustNo, DATEADD(Second, (DATEPART(Second, TimeStamp) 
+                                                   + DATEPART(Minute, TimeStamp) * 60) + DATEPART(Hour, TimeStamp) * 3600, CAST(VoucherDate AS DATETIME)) AS VoucherDate, DeliveryDate, DueDate, TimeStamp, ISNULL(NetInvoice, 0) 
+                                                   * ExchangePrice AS NetInvoice, ISNULL(TotalDiscount, 0) * ExchangePrice AS TotalDiscount, ISNULL(TotalExpense, 0) * ExchangePrice AS TotalExpense, ISNULL(TotalTax, 0) * ExchangePrice AS TotalTax, 
+                                                   ISNULL(TotalBeforTax, 0) * ExchangePrice AS TotalBeforTax, ISNULL(TotalInvoice, 0) * ExchangePrice AS TotalInvoice, Note, VoucherDesc, VoucherID, CatID, 
+                                                   DeliveryAddress
+                          FROM            (SELECT        FiscalYearID, VoucherTypeID, VoucherNo, CustNo, VoucherDate, DeliveryDate, DueDate, TimeStamp, NetInvoice, TotalDiscount, TotalExpense, TotalTax, TotalBeforTax, TotalInvoice, Note, VoucherDesc, 
+                                                                              VoucherID, CatID, ExchangePrice, DeliveryAddress
+                                                    FROM            (SELECT        SchRegistrationVoucherHeader.FiscalYearID, SchRegistrationVoucherHeader.VoucherTypeID, SchRegistrationVoucherHeader.VoucherNo, (CASE WHEN isnull(walkinID, 0) 
+                                                                                                        = 0 THEN (CASE WHEN isnull(SchRegistrationVoucherHeader.CustID, 0) = 0 THEN CONVERT(varchar(25), T_Customers.CustID, 0) ELSE (CONVERT(varchar(25), 
+                                                                                                        SchRegistrationVoucherHeader.CustID, 0)) END) ELSE (CONVERT(varchar(25), SchRegistrationVoucherHeader.CustID, 0) + '-') + CONVERT(varchar(25), walkinID, 0) END) AS CustNo, 
+                                                                                                        SchRegistrationVoucherHeader.VoucherDate, SchRegistrationVoucherHeader.VoucherDate AS DeliveryDate, SchRegistrationVoucherHeader.DueDate, 
+                                                                                                        SchRegistrationVoucherHeader.TimeStamp, SchRegistrationVoucherHeader.NetInvoice, SchRegistrationVoucherHeader.TotalDiscount, 0 AS TotalExpense, 
+                                                                                                        SchRegistrationVoucherHeader.TotalTax, SchRegistrationVoucherHeader.TotalInvoice - ISNULL(SchRegistrationVoucherHeader.TotalTax, 0) AS TotalBeforTax, 
+                                                                                                        SchRegistrationVoucherHeader.TotalInvoice, SchRegistrationVoucherHeader.Note, SchRegistrationVoucherHeader.VoucherDesc, SchRegistrationVoucherHeader.VoucherID, 
+                                                                                                        T_SYSVoucherTypes_1.CatID, (CASE WHEN CalculateType = 1 THEN 1 / ExchangeRate ELSE ExchangeRate END) AS ExchangePrice, T_Customers.DeliveryAddress
+                                                                              FROM            SchRegistrationVoucherHeader INNER JOIN
+                                                                                                        T_SYSVoucherTypes AS T_SYSVoucherTypes_1 ON SchRegistrationVoucherHeader.VoucherTypeID = T_SYSVoucherTypes_1.VoucherTypeID INNER JOIN
+                                                                                                        SchRegistrationVoucherDetails ON SchRegistrationVoucherHeader.FiscalYearID = SchRegistrationVoucherDetails.FiscalYearID AND 
+                                                                                                        SchRegistrationVoucherHeader.VoucherTypeID = SchRegistrationVoucherDetails.VoucherTypeID AND 
+                                                                                                        SchRegistrationVoucherHeader.VoucherNo = SchRegistrationVoucherDetails.VoucherNo LEFT OUTER JOIN
+                                                                                                        T_Customers RIGHT OUTER JOIN
+                                                                                                        SchGuardians ON T_Customers.CustID = SchGuardians.CustNo ON SchRegistrationVoucherDetails.GuardianID = SchGuardians.GuardianID
+                                                                              WHERE        (SchRegistrationVoucherHeader.FiscalYearID = @FiscalYearID) AND (SchRegistrationVoucherHeader.VoucherTypeID = @VoucherTypeID) AND 
+                                                                                                        (SchRegistrationVoucherHeader.VoucherNo = @VoucherNo) AND (T_SYSVoucherTypes_1.CatID = 7)
+                                                                              UNION ALL
+                                                                              SELECT        SchRegistrationVoucherHeader_1.FiscalYearID, SchRegistrationVoucherHeader_1.VoucherTypeID, SchRegistrationVoucherHeader_1.VoucherNo, (CASE WHEN isnull(walkinID, 0) 
+                                                                                                       = 0 THEN CONVERT(varchar(25), SchRegistrationVoucherHeader_1.CustID, 0) ELSE (CONVERT(varchar(25), SchRegistrationVoucherHeader_1.CustID, 0) + '-') + CONVERT(varchar(25), walkinID, 0) 
+                                                                                                       END) AS CustNo, SchRegistrationVoucherHeader_1.VoucherDate, SchRegistrationVoucherHeader_1.VoucherDate AS DeliveryDate, SchRegistrationVoucherHeader_1.DueDate, 
+                                                                                                       SchRegistrationVoucherHeader_1.TimeStamp, SchRegistrationVoucherHeader_1.NetInvoice, SchRegistrationVoucherHeader_1.TotalDiscount, 0 AS TotalExpense, 
+                                                                                                       SchRegistrationVoucherHeader_1.TotalTax, SchRegistrationVoucherHeader_1.TotalInvoice - ISNULL(SchRegistrationVoucherHeader_1.TotalTax, 0) AS TotalBeforTax, 
+                                                                                                       SchRegistrationVoucherHeader_1.TotalInvoice, SchRegistrationVoucherHeader_1.Note, SchRegistrationVoucherHeader_1.VoucherDesc, SchRegistrationVoucherHeader_1.VoucherID, 
+                                                                                                       T_SYSVoucherTypes_1.CatID, (CASE WHEN CalculateType = 1 THEN 1 / ExchangeRate ELSE ExchangeRate END) AS ExchangePrice, T_Customers_2.DeliveryAddress
+                                                                              FROM            SchRegistrationVoucherHeader AS SchRegistrationVoucherHeader_1 INNER JOIN
+                                                                                                       T_SYSVoucherTypes AS T_SYSVoucherTypes_1 ON SchRegistrationVoucherHeader_1.VoucherTypeID = T_SYSVoucherTypes_1.VoucherTypeID INNER JOIN
+                                                                                                       T_Customers AS T_Customers_2 ON SchRegistrationVoucherHeader_1.CustID = T_Customers_2.CustID
+                                                                              WHERE        (SchRegistrationVoucherHeader_1.FiscalYearID = @FiscalYearID) AND (SchRegistrationVoucherHeader_1.VoucherTypeID = @VoucherTypeID) AND 
+                                                                                                       (SchRegistrationVoucherHeader_1.VoucherNo = @VoucherNo) AND (T_SYSVoucherTypes_1.CatID IN (1, 6))) AS QSchool) AS QSchHeader) AS QHeaderInfo INNER JOIN
+                             (SELECT        VoucherID, CASE WHEN IsNull(Vdebit, 0) = 0 THEN 1 ELSE 0 END AS IsCreditNote
+                               FROM            SysCustomerTrans) AS QCreditInfo ON QHeaderInfo.VoucherID = QCreditInfo.VoucherID LEFT OUTER JOIN
+                         T_SYSVoucherTypes AS T_SYSVoucherTypes_3 ON QHeaderInfo.VoucherTypeID = T_SYSVoucherTypes_3.VoucherTypeID LEFT OUTER JOIN
+                         T_SysAddresses ON QHeaderInfo.DeliveryAddress = T_SysAddresses.AddressID LEFT OUTER JOIN
+                         T_Customers AS T_Customers_1 ON QHeaderInfo.CustNo = T_Customers_1.CustomerNo
 "
     End Function
 
+
+    Function GetSourceVoucherDataQuery() As String
+        Return $"SELECT CAST(@CompanyID AS VARCHAR(50)) + '_'+ ISNULL(VoucherID, NULL) AS VoucherID,  
+       ISNULL(UUID, NULL) AS UUID, 
+       ISNULL(TotalInvoiceLC, NULL) AS TotalInvoiceLC
+FROM 
+(
+    SELECT VoucherID, UUID, TotalInvoiceLC
+    FROM StrVoucherHeader
+    WHERE FiscalYearId = @fiscalYearId 
+      AND VoucherTypeId = @voucherTypeId 
+      AND VoucherNo = @voucherNo
+
+    UNION ALL
+
+    SELECT VoucherID, UUID, TotalInvoice
+    FROM RecInvoiceHeader
+    WHERE FiscalYearId = @fiscalYearId 
+      AND InvoiceTypeID = @voucherTypeId 
+      AND InvoiceNo = @voucherNo
+
+    UNION ALL
+
+    SELECT VoucherID, UUID, TotalInvoice
+    FROM SchRegistrationVoucherHeader
+    WHERE FiscalYearId = @fiscalYearId 
+      AND VoucherTypeId = @voucherTypeId 
+      AND VoucherNo = @voucherNo
+) AS CombinedResults
+WHERE CombinedResults.VoucherID IS NOT NULL;"
+
+    End Function
+
+
+
     Function GetItemInfoQuery() As String
         Return $"
-SELECT myID, UnitCode,ItemName,  InvoiceQty,  PriceAmount * ExchangePrice AS PriceAmount , PriceAmount * InvoiceQty * ExchangePrice AS TotalPriceAmount , TotalRowDiscount  * ExchangePrice  As TotalRowDiscount , (PriceAmount * InvoiceQty * ExchangePrice ) - ( TotalRowDiscount  * ExchangePrice) As TotalPriceAmountAfterDiscount 
+SELECT        QDetailsInfo.*, T_SYSVoucherTypes.ModuleID, T_SYSVoucherTypes.CatID, T_SYSVoucherTypes.CatNameA, T_SYSVoucherTypes.CatNameE
+FROM            (SELECT myID, UnitCode,ItemName,  InvoiceQty,  PriceAmount * ExchangePrice AS PriceAmount , PriceAmount * InvoiceQty * ExchangePrice AS TotalPriceAmount , TotalRowDiscount  * ExchangePrice  As TotalRowDiscount , (PriceAmount * InvoiceQty * ExchangePrice ) - ( TotalRowDiscount  * ExchangePrice) As TotalPriceAmountAfterDiscount 
 ,AlowanceChargeAmount-  (  TotalRowDiscount  * ExchangePrice )  As HeaderDisount ,  AlowanceChargeAmount * ExchangePrice AS AlowanceChargeAmount,   LineExtensionAmount * ExchangePrice AS LineExtensionAmount, TaxCategoryPercent,TaxAmount * ExchangePrice AS TaxAmount, RoundingAmount * ExchangePrice AS RoundingAmount,  
-                  ISNULL(TaxExemption, '') AS TaxExemption
-FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
-                                    TaxExemption
+                  ISNULL(TaxExemption, '') AS TaxExemption,SourceFiscalYearID,SourceVoucherTypeID,SourceVoucherNo
+				  , QDetailsInfo.SourceStr,@VoucherTypeID As VoucherTypeID
+FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmount, TaxAmount, ((PriceAmount * InvoiceQty * ExchangePrice ) - ( TotalRowDiscount  * ExchangePrice)) + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
+                                    TaxExemption,SourceFiscalYearID,SourceVoucherTypeID,SourceVoucherNo,'' AS SourceStr
                   FROM      (SELECT myID, UnitCode, InvoiceQty,ISNULL(DiscountValue, 0) As TotalRowDiscount , ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, (ISNULL(InvoiceQty, 0) 
                                                        * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0))) * ISNULL(TaxPerc, 0) AS TaxAmount, ISNULL(TaxPerc, 0) * 100 AS TaxCategoryPercent, ItemName, 
-                                                       PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption
+                                                       PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption,SourceFiscalYearID,SourceVoucherTypeID,SourceVoucherNo
                                      FROM      (SELECT StrVoucherDetails_2.RowNo AS myID, ISNULL(ISNULL(StrUnits.UnitCodeE, StrUnits.UnitCodeA), 'PCE') AS UnitCode, StrVoucherDetails_2.Qty AS InvoiceQty, StrVoucherDetails_2.ItemDesc AS ItemName, 
                                                                         case when IsNull(MainRowNo,0) = 0 then  StrVoucherDetails_2.Price else StrVoucherDetails_2.KitItemPrice end AS PriceAmount, ISNULL(StrVoucherDetails_2.TotalDiscount, 0) AS DiscountValue, 
                                                                           CASE WHEN NetInvoice <> 0 THEN TotalPriceWithKitAfterDiscount / NetInvoice ELSE 0 END AS ItemPerc, SysAddresses_2.TaxTypeID, StrVoucherHeader_2.TotalInvoice, 
                                                                           StrVoucherHeader_2.TotalDiscount AS headerDiscount, StrVoucherHeader_2.TotalTax AS headerTax, SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, StrVoucherHeader_2.ExchangePrice, 
-                                                                          SysTaxTypes_1.TaxExemption
+                                                                          SysTaxTypes_1.TaxExemption,StrVoucherDetails_2.SourceFiscalYearID,StrVoucherDetails_2.SourceVoucherTypeID,StrVoucherDetails_2.SourceVoucherNo
                                                         FROM      StrVoucherHeader AS StrVoucherHeader_2 INNER JOIN
                                                                           StrVoucherDetails AS StrVoucherDetails_2 ON StrVoucherHeader_2.FiscalYearID = StrVoucherDetails_2.FiscalYearID AND StrVoucherHeader_2.VoucherTypeID = StrVoucherDetails_2.VoucherTypeID AND 
                                                                           StrVoucherHeader_2.VoucherNo = StrVoucherDetails_2.VoucherNo INNER JOIN
@@ -1955,15 +2334,15 @@ FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmoun
                                     AS QDetailsInfo
                   UNION ALL
                   SELECT myID, UnitCode, InvoiceQty, TotalRowDiscount ,LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
-                                    TaxExemption
+                                    TaxExemption,0 as SourceFiscalYearID ,0 as 	SourceVoucherTypeID,0 as SourceVoucherNo, SourceStr
                   FROM     (SELECT myID, UnitCode, InvoiceQty,ISNULL(DiscountValue, 0) As TotalRowDiscount, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, IsTaxable * (ISNULL(InvoiceQty, 0) 
                                                       * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0))) * ISNULL(TaxPerc, 0) AS TaxAmount, IsTaxable * ISNULL(TaxPerc, 0) * 100 AS TaxCategoryPercent, ItemName, 
-                                                      PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption
+                                                      PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption ,  SourceStr
                                     FROM      (SELECT RecInvoiceDetails_2.RowNo AS myID, 'PCE' AS UnitCode, 1 AS InvoiceQty, ISNULL(ISNULL(SysSaleTypes.TypeNameE, SysSaleTypes.TypeNameA), ISNULL(GLChartAcc.ChartAccNameE, 
                                                                          GLChartAcc.ChartAccNameA)) AS ItemName, RecInvoiceDetails_2.SaleAmountFC AS PriceAmount, 0 AS DiscountValue, CASE WHEN NetInvoice <> 0 THEN SaleAmountFC / NetInvoice ELSE 0 END AS ItemPerc, 
                                                                          SysAddresses_2.TaxTypeID, RecInvoiceHeader_2.TotalInvoice, RecInvoiceHeader_2.TotalDiscount AS headerDiscount, RecInvoiceHeader_2.TotalTax AS headerTax, 
                                                                          SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, CASE WHEN RecInvoiceDetails_2.SaleTypeID <> 0 THEN SysSaleTypes.istaxable ELSE 1 END AS IsTaxable, 
-                                                                         (CASE WHEN CalculatType = 1 THEN 1 / ExchangeRate ELSE ExchangeRate END) AS ExchangePrice, SysTaxTypes_1.TaxExemption
+                                                                         (CASE WHEN CalculatType = 1 THEN 1 / ExchangeRate ELSE ExchangeRate END) AS ExchangePrice, SysTaxTypes_1.TaxExemption,RecInvoiceHeader_2.Note AS SourceStr
                                                        FROM      RecInvoiceHeader AS RecInvoiceHeader_2 INNER JOIN
                                                                          RecInvoiceDetails AS RecInvoiceDetails_2 ON RecInvoiceHeader_2.FiscalYearID = RecInvoiceDetails_2.FiscalYearID AND RecInvoiceHeader_2.InvoiceTypeID = RecInvoiceDetails_2.InvoiceTypeID AND 
                                                                          RecInvoiceHeader_2.InvoiceNo = RecInvoiceDetails_2.InvoiceNo INNER JOIN
@@ -1979,16 +2358,16 @@ FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmoun
                                                        WHERE   (RecInvoiceHeader_2.FiscalYearID = @FiscalyearID) AND (RecInvoiceHeader_2.InvoiceTypeID = @voucherTypeId) AND (RecInvoiceHeader_2.InvoiceNo = @voucherNo)) AS QSaleInfo_4) AS QDetailsInfo
                   UNION ALL
                   SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
-                                    TaxExemption
+                                    TaxExemption,SourceFiscalYearID ,	SourceVoucherTypeID, SourceVoucherNo,'' As SourceStr
                   FROM     (SELECT myID, UnitCode, InvoiceQty,ISNULL(DiscountValue, 0) As TotalRowDiscount, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, IsTaxable * (ISNULL(InvoiceQty, 0) 
                                                       * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0))) * ISNULL(TaxPerc, 0) AS TaxAmount, IsTaxable * ISNULL(TaxPerc, 0) * 100 AS TaxCategoryPercent, ItemName, 
-                                                      PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption
+                                                      PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption,SourceFiscalYearID ,	SourceVoucherTypeID, SourceVoucherNo
                                     FROM      (SELECT SchStudentTrans_2.RowNo AS myID, 'PCE' AS UnitCode, 1 AS InvoiceQty, ISNULL(SchFees.FeesNameE, SchFees.FeesNameA) AS ItemName, SchRegSemesters.FeesAmount AS PriceAmount, 
                                                                          ISNULL(QryDiscount.TotalDiscount, 0) AS DiscountValue, CASE WHEN NetInvoice <> 0 THEN Amount / NetInvoice ELSE 0 END AS ItemPerc, 1 AS TaxTypeID, SchRegistrationVoucherHeader_2.TotalInvoice, 
                                                                          SchRegistrationVoucherHeader_2.TotalDiscount AS headerDiscount, SchRegistrationVoucherHeader_2.TotalTax AS headerTax, SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, 
                                                                          CASE WHEN SchStudentTrans_2.FeesID <> 0 THEN CASE WHEN SchFees.istaxable = 2 THEN 1 ELSE SchFees.istaxable END ELSE 1 END AS IsTaxable, 
                                                                          (CASE WHEN SchRegistrationVoucherHeader_2.CalculateType = 1 THEN 1 / SchRegistrationVoucherHeader_2.ExchangeRate ELSE SchRegistrationVoucherHeader_2.ExchangeRate END) AS ExchangePrice, 
-                                                                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption
+                                                                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption,0 as SourceFiscalYearID ,0 as 	SourceVoucherTypeID,0 as SourceVoucherNo
                                                        FROM      SchFees RIGHT OUTER JOIN
                                                                          SchRegSemesters INNER JOIN
                                                                          SchRegistrationVoucherHeader AS SchRegistrationVoucherHeader_2 INNER JOIN
@@ -2013,7 +2392,7 @@ FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmoun
                                                                          SchRegistrationVoucherHeader_2.TotalInvoice, SchRegistrationVoucherHeader_2.TotalDiscount AS headerDiscount, SchRegistrationVoucherHeader_2.TotalTax AS headerTax, 
                                                                          SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, CASE WHEN SchStudentTrans_2.FeesID <> 0 THEN CASE WHEN SchFees.istaxable = 2 THEN 1 ELSE SchFees.istaxable END ELSE 1 END AS IsTaxable, 
                                                                          (CASE WHEN SchRegistrationVoucherHeader_2.CalculateType = 1 THEN 1 / SchRegistrationVoucherHeader_2.ExchangeRate ELSE SchRegistrationVoucherHeader_2.ExchangeRate END) AS ExchangePrice, 
-                                                                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption
+                                                                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption,0 as SourceFiscalYearID ,0 as 	SourceVoucherTypeID,0 as SourceVoucherNo
                                                        FROM     SchRegSemesters INNER JOIN
                                                                          SchRegistrationVoucherHeader AS SchRegistrationVoucherHeader_2 INNER JOIN
                                                                          SchStudentTrans AS SchStudentTrans_2 ON SchRegistrationVoucherHeader_2.FiscalYearID = SchStudentTrans_2.FiscalYearID AND 
@@ -2034,7 +2413,7 @@ FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmoun
                                                                          SchRegistrationVoucherHeader_2.TotalDiscount AS headerDiscount, SchRegistrationVoucherHeader_2.TotalTax AS headerTax, SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, 
                                                                          CASE WHEN SchRegRetractionVoucherDetails.FeesID <> 0 THEN CASE WHEN SchFees.istaxable = 2 THEN 1 ELSE SchFees.istaxable END ELSE 1 END AS IsTaxable, 
                                                                          (CASE WHEN SchRegistrationVoucherHeader_2.CalculateType = 1 THEN 1 / SchRegistrationVoucherHeader_2.ExchangeRate ELSE SchRegistrationVoucherHeader_2.ExchangeRate END) AS ExchangePrice, 
-                                                                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption
+                                                                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption,SchRegRetractionVoucherDetails.SourceFiscalYearID,SchRegRetractionVoucherDetails.SourceVoucherTypeID,SchRegRetractionVoucherDetails.SourceVoucherNo
                                                        FROM     SchFees RIGHT OUTER JOIN
                                                                          SchRegistrationVoucherHeader AS SchRegistrationVoucherHeader_2 INNER JOIN
                                                                          SchRegRetractionVoucherDetails ON SchRegistrationVoucherHeader_2.FiscalYearID = SchRegRetractionVoucherDetails.FiscalYearID AND 
@@ -2046,7 +2425,7 @@ FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmoun
                                                                          (SchRegistrationVoucherHeader_2.VoucherNo = @voucherNo)) AS QSaleInfo_4) AS QDetailsInfo
                   UNION ALL
                   SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
-                                    TaxExemption
+                                    TaxExemption,0 as SourceFiscalYearID ,0 as 	SourceVoucherTypeID,0 as SourceVoucherNo,'' AS SourceStr
                   FROM     (SELECT myID, UnitCode, InvoiceQty,ISNULL(DiscountValue, 0) As TotalRowDiscount, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, IsTaxable * (ISNULL(InvoiceQty, 0) 
                                                       * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0))) * ISNULL(TaxPerc, 0) AS TaxAmount, IsTaxable * ISNULL(TaxPerc, 0) * 100 AS TaxCategoryPercent, ItemName, 
                                                       PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption
@@ -2064,8 +2443,34 @@ FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmoun
                                                                          SysTaxTypes AS SysTaxTypes_1 ON AstVoucherDetails_2.TaxID = SysTaxTypes_1.TaxID LEFT OUTER JOIN
                                                                          AstAssets ON AstVoucherDetails_2.AssetCode = AstAssets.AssetCode
                                                        WHERE   (AstVoucherHeader_2.FiscalYearID = @FiscalyearID) AND (AstVoucherHeader_2.VoucherTypeID = @voucherTypeId) AND (AstVoucherHeader_2.VoucherNo = @voucherNo)) AS QSaleInfo_4) AS QDetailsInfo) 
-                  AS QDetailsInfo
+                  AS QDetailsInfo) AS QDetailsInfo LEFT OUTER JOIN
+                         T_SYSVoucherTypes ON QDetailsInfo.VoucherTypeID = T_SYSVoucherTypes.VoucherTypeID
 "
+    End Function
+
+
+    Function UpdateUUIDDataQuery(newUUID As String) As String
+
+        Return $"IF EXISTS (SELECT 1 FROM StrVoucherHeader WHERE FiscalYearID = @fiscalYearId AND VoucherTypeID = @voucherTypeId AND VoucherNo = @voucherNo)
+BEGIN
+    UPDATE StrVoucherHeader
+    SET UUID = '{newUUID}'
+    WHERE FiscalYearID = @fiscalYearId AND VoucherTypeID = @voucherTypeId AND VoucherNo = @voucherNo;
+END
+ELSE IF EXISTS (SELECT 1 FROM RecInvoiceHeader WHERE FiscalYearID = @fiscalYearId AND InvoiceTypeID = @voucherTypeId AND InvoiceNo = @voucherNo)
+BEGIN
+    UPDATE RecInvoiceHeader
+    SET UUID = '{newUUID}'
+    WHERE FiscalYearID = @fiscalYearId AND InvoiceTypeID = @voucherTypeId AND InvoiceNo = @voucherNo;
+END
+ELSE IF EXISTS (SELECT 1 FROM SchRegistrationVoucherHeader WHERE FiscalYearID = @fiscalYearId AND VoucherTypeID = @voucherTypeId AND VoucherNo = @voucherNo)
+BEGIN
+    UPDATE SchRegistrationVoucherHeader
+    SET UUID = '{newUUID}'
+    WHERE FiscalYearID = @fiscalYearId AND VoucherTypeID = @voucherTypeId AND VoucherNo = @voucherNo;
+END"
+
+
     End Function
 #End Region '"SQL Statments"
 End Class
