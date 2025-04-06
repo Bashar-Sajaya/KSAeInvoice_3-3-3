@@ -178,7 +178,7 @@ Public Class InvoiceHelper333
                 If Not IsWarnings Then
                     warningsStr = "Warnings are ignored. "
                 End If
-                apiResponse.errors = (apiResponse.errors)
+                apiResponse.errors = ValidateJsonB2C(apiResponse.errors)
 
                 '??
                 apiResponse.ErrorMessage = $"Local Validation: {warningsStr}Please note that the error with code KSA-13 (if exists) is generated exclusively during local validation."
@@ -2135,16 +2135,16 @@ Public Class InvoiceHelper333
     End Function
 
     Function ValidateJsonB2C(ByRef jsonString As List(Of ResultStructure)) As List(Of ResultStructure)
-        ' استخراج العناصر اللي كودها "KSA-13"
+
         Dim removedItems = jsonString.Where(Function(item) item.code = "KSA-13").ToList()
 
         If removedItems.Any() Then
-            ' حذفها من القائمة الأصلية
+
             jsonString.RemoveAll(Function(item) item.code = "KSA-13")
-            ' إرجاع العناصر المحذوفة
+
             Return jsonString
         Else
-            ' ما انحذف شيء، إرجاع القائمة الأصلية
+
             Return jsonString
         End If
     End Function
