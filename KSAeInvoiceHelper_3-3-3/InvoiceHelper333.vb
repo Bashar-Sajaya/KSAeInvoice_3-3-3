@@ -119,13 +119,13 @@ Public Class InvoiceHelper333
             Dim signedXmlWithDeclaration As String = signedXml
 
             Dim validationResult As InvoiceResult = generalFunctions.ZATCA_ValidateEInvoice(SignedXmlDocument, decodedCertificate, csrResult.PrivateKey)
-                If validationResult.success = False Then
-                    Dim jsonString As String = JsonConvert.SerializeObject(validationResult, Newtonsoft.Json.Formatting.Indented)
-                    If Not ValidateJson(jsonString, IsWarnings) Then
-                        validationResult.ErrorMessage = "Local Validation: Please note that the error with code KSA-13 (if exists) is generated exclusively during local validation."
-                        Return validationResult
-                    End If
+            If validationResult.success = False Then
+                Dim jsonString As String = JsonConvert.SerializeObject(validationResult, Newtonsoft.Json.Formatting.Indented)
+                If Not ValidateJson(jsonString, IsWarnings) Then
+                    validationResult.ErrorMessage = "Local Validation: Please note that the error with code KSA-13 (if exists) is generated exclusively during local validation."
+                    Return validationResult
                 End If
+            End If
 
 
             ' Get invoice details
@@ -171,13 +171,16 @@ Public Class InvoiceHelper333
                 ' B2C Invoice Processing
                 qrCode = generalFunctions.ZATCA_GenerateQRCodeForXml(SignedXmlDocument)
                 status = 1
-                apiResponse.errors = ValidationResult.errors
-                apiResponse.warnings = ValidationResult.warnings
+                apiResponse.errors = validationResult.errors
+                apiResponse.warnings = validationResult.warnings
                 apiResponse.success = True
                 Dim warningsStr As String = ""
                 If Not IsWarnings Then
                     warningsStr = "Warnings are ignored. "
                 End If
+                apiResponse.errors = (apiResponse.errors)
+
+                '??
                 apiResponse.ErrorMessage = $"Local Validation: {warningsStr}Please note that the error with code KSA-13 (if exists) is generated exclusively during local validation."
             End If
 
@@ -613,6 +616,9 @@ Public Class InvoiceHelper333
                             }
 
                         invoiceData.CompanyInfo = companyInfo
+                    Else
+                        Throw New Exception("Failed to get invoice data or invoice items.")
+
                     End If
                     connection.Close()
                 End Using
@@ -672,7 +678,12 @@ Public Class InvoiceHelper333
                         }
 
                         invoiceData.InvoiceInfo = invoiceInfo
+
+                    Else
+                        Throw New Exception("Failed to get invoice data or invoice items.")
+
                     End If
+
 
                 End Using
                 connection.Close()
@@ -713,7 +724,6 @@ Public Class InvoiceHelper333
                         }
                             items.Add(itemInfo)
                         End While
-
                         invoiceData.Items = items
                     End Using
                 End Using
@@ -961,7 +971,7 @@ Public Class InvoiceHelper333
         End If
 
         'Modfiy Ibrahim
-        UpdateVoucherData(fiscalYearId, voucherTypeId, voucherNo, InvoiceBasic.UUID)
+        UpdateVoucherData(fiscalYearId, voucherTypeId, voucherNo, InvoiceBasic.UUID, _companyId)
 
         Return xmlString
     End Function
@@ -2063,7 +2073,8 @@ Public Class InvoiceHelper333
         {"VATEX-SA-36", ("Qualifying metals", "Z")},
         {"VATEX-SA-EDU", ("Private education to citizen", "Z")},
         {"VATEX-SA-HEA", ("Private healthcare to citizen", "Z")},
-        {"VATEX-SA-MLTRY", ("Supply of qualified military goods", "Z")}
+        {"VATEX-SA-MLTRY", ("Supply of qualified military goods", "Z")},
+        {"VATEX-SA-OOS", ("Reason is free text, to be provided by the taxpayer on case to case basis", "O")}
     }
 
         If exemptions.ContainsKey(zeroTaxExemptionCode.Trim()) Then
@@ -2123,7 +2134,25 @@ Public Class InvoiceHelper333
         End If
     End Function
 
-    Function UpdateVoucherData(fiscalYearId As Integer, voucherTypeId As Integer, voucherNo As Integer, newUUID As String)
+    Function ValidateJsonB2C(ByRef jsonString As List(Of ResultStructure)) As List(Of ResultStructure)
+        ' استخراج العناصر اللي كودها "KSA-13"
+        Dim removedItems = jsonString.Where(Function(item) item.code = "KSA-13").ToList()
+
+        If removedItems.Any() Then
+            ' حذفها من القائمة الأصلية
+            jsonString.RemoveAll(Function(item) item.code = "KSA-13")
+            ' إرجاع العناصر المحذوفة
+            Return jsonString
+        Else
+            ' ما انحذف شيء، إرجاع القائمة الأصلية
+            Return jsonString
+        End If
+    End Function
+
+
+
+
+    Function UpdateVoucherData(fiscalYearId As Integer, voucherTypeId As Integer, voucherNo As Integer, newUUID As String, companyId As Integer)
         Using connection As New SqlConnection(_clientConnectionString)
             connection.Open()
 
@@ -2132,6 +2161,7 @@ Public Class InvoiceHelper333
                 command.Parameters.AddWithValue("@fiscalYearId", fiscalYearId)
                 command.Parameters.AddWithValue("@voucherTypeId", voucherTypeId)
                 command.Parameters.AddWithValue("@voucherNo", voucherNo)
+                command.Parameters.AddWithValue("@companyId", companyId)
 
                 command.ExecuteNonQuery()
             End Using

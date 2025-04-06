@@ -12,7 +12,7 @@ Public Class ExtractUBle
                 Dim SourceStr As String = invoiceData.Items(0).SourceStr
 
                 If Not String.IsNullOrEmpty(SourceStr) Then
-                    Dim parts As String() = SourceStr.Split("-"c)
+                    Dim parts As String() = SourceStr.Split("-")
 
                     If parts.Length >= 3 Then
                         SourceFiscalYearID = If(String.IsNullOrEmpty(parts(0)), 0, Integer.Parse(parts(0)))
