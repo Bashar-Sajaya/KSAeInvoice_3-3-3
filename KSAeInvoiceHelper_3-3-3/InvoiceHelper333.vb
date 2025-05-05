@@ -66,10 +66,10 @@ Public Class InvoiceHelper333
             End If
 
             ' Check if voucher ID already exists
-            ''   If VoucherIDExistsInDB(voucherId) Then
-            ''       apiResponse.errorSource = -5
-            ''       Throw New Exception("VoucherID already exists in the database. Invoice already sent.")
-            ''   End If
+            If VoucherIDExistsInDB(voucherId) Then
+                apiResponse.errorSource = -5
+                Throw New Exception("VoucherID already exists in the database. Invoice already sent.")
+            End If
 
             Dim nextCounter As Integer = GetNextCounter()
             Dim previousInvoiceHash As String = GetPIH()
