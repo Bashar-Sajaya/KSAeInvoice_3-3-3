@@ -66,10 +66,10 @@ Public Class InvoiceHelper333
             End If
 
             ' Check if voucher ID already exists
-            If VoucherIDExistsInDB(voucherId) Then
-                apiResponse.errorSource = -5
-                Throw New Exception("VoucherID already exists in the database. Invoice already sent.")
-            End If
+            ''   If VoucherIDExistsInDB(voucherId) Then
+            ''       apiResponse.errorSource = -5
+            ''       Throw New Exception("VoucherID already exists in the database. Invoice already sent.")
+            ''   End If
 
             Dim nextCounter As Integer = GetNextCounter()
             Dim previousInvoiceHash As String = GetPIH()
@@ -759,7 +759,9 @@ Public Class InvoiceHelper333
 
             Dim invoiceDataNew = UpdateInvoiceData(invoiceData)
 
-            Return invoiceDataNew
+            Dim invoiceDataNewTax = UpdateInvoiceDataTax(invoiceDataNew)
+
+            Return invoiceDataNewTax
         Catch ex As Exception
             Dim message As String = "Failed to fetch invoice data from the DB: " & ex.Message
             Debug.WriteLine(message)
@@ -767,58 +769,57 @@ Public Class InvoiceHelper333
         End Try
     End Function
 
+    Public Function TruncateDecimal(value As Decimal, decimals As Integer) As Decimal
+        Dim factor As Decimal = CDec(Math.Pow(10, decimals))
+        Return Math.Truncate(value * factor) / factor
+    End Function
 
+
+
+
+
+    ' تحديث الخصومات على مستوى الهيدر وتوزيع الفرق إن وجد
     Public Function UpdateInvoiceData(invoiceData As InvoiceData) As InvoiceData
         Try
-
-            Dim MinusTotalDiscount As Decimal = 0
             Dim TotalDiscountSumHeader As Decimal = 0
-            Dim MaxDiscount As Decimal = 0
             Dim MinusTotalDiscoun As Decimal = 0
+            Dim MaxDiscount As Decimal = 0
             Dim MaxTaxable As Decimal = 0
 
-            ' تحقق من قيمة الخصم
             If invoiceData.InvoiceInfo.TotalDiscountLC <> 0 Then
                 Dim TotalDiscountHeader As Decimal = invoiceData.InvoiceInfo.TotalDiscountLC
 
+                ' حساب مجموع الخصومات من العناصر
+                TotalDiscountSumHeader = invoiceData.Items.Sum(Function(item) item.HeaderDisount)
 
-                ' حساب مجموع الخصومات
-                TotalDiscountSumHeader = invoiceData.Items.Sum(Function(item) Math.Round(item.HeaderDisount, 2))
+                ' تقطيع الخصومات إلى منزلتين عشريتين
+                Dim result As Decimal = TruncateDecimal(TotalDiscountSumHeader, 2)
+                Dim displayValue As String = result.ToString("0.00")
+                Dim finalDecimal As Decimal = Decimal.Parse(displayValue)
 
-                ' حساب الفرق في الخصومات
-                MinusTotalDiscoun = TotalDiscountHeader - TotalDiscountSumHeader
+                ' حساب الفرق
+                MinusTotalDiscoun = finalDecimal - TotalDiscountHeader
 
                 If MinusTotalDiscoun <> 0 Then
-                    ' محاولة العثور على عنصر مع نسبة خصم صفر
                     Dim foundZeroPercent As Boolean = False
+
+                    ' محاولة توزيع الفرق على عنصر ضريبته 0
                     For Each item In invoiceData.Items
-                        If item.TaxPerc = 0 AndAlso item.TaxPerc <> Nothing Then
-                            item.HeaderDisount = Math.Round(item.HeaderDisount, 2) + MinusTotalDiscoun
-                            item.TotalPriceLC = Math.Round(item.TotalPriceLC, 2) - MinusTotalDiscoun
+                        If item.TaxPerc = 0 Then
+                            item.HeaderDisount -= MinusTotalDiscoun
+                            item.TotalPriceLC += MinusTotalDiscoun
                             foundZeroPercent = True
                             Exit For
                         End If
                     Next
 
-                    ' إذا لم يتم العثور على خصم صفر، قم بالبحث عن أكبر خصم
-
+                    ' إذا لم يتم العثور على عنصر ضريبته 0، وزع الفرق على العنصر بأكبر خصم
                     If Not foundZeroPercent Then
-                        MaxDiscount = invoiceData.Items.Max(Function(item) Math.Round(item.HeaderDisount, 2))
+                        MaxDiscount = invoiceData.Items.Max(Function(item) item.HeaderDisount)
                         For Each item In invoiceData.Items
-                            If Math.Round(item.HeaderDisount, 2) >= MaxDiscount Then
-                                item.HeaderDisount = Math.Round(item.HeaderDisount, 2) + MinusTotalDiscoun
-                                Exit For
-                            End If
-                        Next
-                    End If
-
-
-                    ' إذا لم يتم العثور على خصم بنسبة صفر، قم بتحديث TotalPriceLC باستخدام MaxDiscount
-                    If Not foundZeroPercent Then
-                        MaxTaxable = invoiceData.Items.Max(Function(item) Math.Round(item.TotalPriceLC, 2))
-                        For Each item In invoiceData.Items
-                            If Math.Round(item.TotalPriceLC, 2) >= MaxDiscount Then
-                                item.TotalPriceLC = Math.Round(item.TotalPriceLC, 2) - MinusTotalDiscoun
+                            If item.HeaderDisount = MaxDiscount Then
+                                item.HeaderDisount -= MinusTotalDiscoun
+                                item.TotalPriceLC += MinusTotalDiscoun
                                 Exit For
                             End If
                         Next
@@ -828,20 +829,57 @@ Public Class InvoiceHelper333
 
             Return invoiceData
         Catch ex As Exception
-
             Return invoiceData
         End Try
-
     End Function
 
+    ' تحديث فروقات الضريبة على مستوى العناصر والهيدر
+    Public Function UpdateInvoiceDataTax(invoiceData As InvoiceData) As InvoiceData
+        Try
+            Dim TotalTaxSumHeader As Decimal = 0
+            Dim MinusTotalDiscounTax As Decimal = 0
+            Dim MaxTax As Decimal = 0
 
+            If invoiceData.InvoiceInfo.TotalTaxLC <> 0 Then
+                Dim TotalTaxHeader As Decimal = invoiceData.InvoiceInfo.TotalTaxLC
 
+                ' حساب مجموع الضريبة الأصلية من العناصر (بدون روند)
+                TotalTaxSumHeader = invoiceData.Items.Sum(Function(item) item.TaxAmount)
 
+                ' مجموع الضريبة بعد التقريب
+                Dim TotalTaxSumHeaderTwo As Decimal = invoiceData.Items.Sum(Function(item) Math.Round(item.TaxAmount, 2))
 
-    'Private Function ValidateData(fiscalYearId As Integer, voucherTypeId As Integer, voucherNo As Integer) As Response
-    '    ' Validation logic here if needed
-    '    Return New Response()
-    'End Function
+                ' تقطيع الضريبة إلى منزلتين عشريتين
+                Dim result As Decimal = TruncateDecimal(TotalTaxSumHeader, 2)
+                Dim displayValue As String = result.ToString("0.00")
+                Dim finalDecimal As Decimal = Decimal.Parse(displayValue)
+
+                ' حساب الفرق
+                MinusTotalDiscounTax = finalDecimal - TotalTaxHeader
+                Dim MinusTotalDiscounTaxsub As Decimal = TotalTaxSumHeaderTwo - TotalTaxHeader
+
+                Dim grouped = invoiceData.Items.GroupBy(Function(i) New With {Key .TaxPerc = i.TaxPerc, Key .TaxExemption = i.TaxExemption})
+
+                If MinusTotalDiscounTaxsub <> 0 AndAlso MinusTotalDiscounTax <> 0 Then
+                    For Each group In grouped
+                        Dim groupItems = group.ToList()
+                        MaxTax = groupItems.Max(Function(item) item.TaxAmount)
+                        For Each item In groupItems
+                            If item.TaxAmount = MaxTax Then
+                                item.TaxAmount -= MinusTotalDiscounTax
+                                Exit For
+                            End If
+                        Next
+                    Next
+                End If
+            End If
+
+            Return invoiceData
+        Catch ex As Exception
+            Return invoiceData
+        End Try
+    End Function
+
 
 #End Region ' "Main"
 
@@ -914,6 +952,18 @@ Public Class InvoiceHelper333
         Dim totalInfo As InvoiceInfo = invoiceData.InvoiceInfo
         Dim LegalMonetaryTotal = MapToTotalInfoB(totalInfo)
         invoiceElement = CreateAllowanceChargeElement(xmlDoc, LegalMonetaryTotal, invoiceElement, taxCatPercent, Result)
+
+
+
+
+
+
+
+
+
+
+
+
 
         ' Section (f)
         'Modfiy Ibrahim
@@ -2031,7 +2081,7 @@ Public Class InvoiceHelper333
         Select New ItemTaxGroupInfo With {
             .TaxPercent = TaxPerc,
             .TaxExemption = TaxExemption,
-             .TaxAmount = Group.Sum(Function(i) i.TaxAmount),
+            .TaxAmount = Group.Sum(Function(i) i.TaxAmount),
             .TotalPrice = Group.Sum(Function(i) i.TotalPriceLC),
             .TotalPriceAmountAfterDiscount = Group.Sum(Function(i) i.TotalPriceAmountAfterDiscount),
             .TotalPriceAfterTax = Group.Sum(Function(i) i.ItemTotalPriceAfterTax),
