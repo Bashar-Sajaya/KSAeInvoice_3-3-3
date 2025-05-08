@@ -10,7 +10,7 @@ Imports System.Text.RegularExpressions
 Imports System.Xml
 Imports Newtonsoft.Json
 Imports Newtonsoft.Json.Linq
-Imports Zatca.EInvoice.SDK.Contracts.Models
+
 
 #Region "Public Class"
 Public Class InvoiceHelper333
@@ -35,6 +35,22 @@ Public Class InvoiceHelper333
     End Sub
 
 #End Region '"Public Class"
+
+
+
+    Private Function ExtractQRCodeValue(xmlDoc As XmlDocument) As String
+        Dim nsMgr As New XmlNamespaceManager(xmlDoc.NameTable)
+        nsMgr.AddNamespace("cbc", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        nsMgr.AddNamespace("cac", "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2")
+
+        Dim node As XmlNode = xmlDoc.SelectSingleNode("//cac:AdditionalDocumentReference[cbc:ID='QR']/cac:Attachment/cbc:EmbeddedDocumentBinaryObject", nsMgr)
+
+        If node IsNot Nothing Then
+            Return node.InnerText
+        End If
+
+        Return String.Empty
+    End Function
 
 #Region "Main"
 
@@ -64,8 +80,8 @@ Public Class InvoiceHelper333
                 apiResponse.errorSource = -2
                 Throw New Exception("VoucherID is either missing or invalid.")
             End If
-
-            ' Check if voucher ID already exists
+            '
+            ' ' Check if voucher ID already exists
             If VoucherIDExistsInDB(voucherId) Then
                 apiResponse.errorSource = -5
                 Throw New Exception("VoucherID already exists in the database. Invoice already sent.")
@@ -169,7 +185,8 @@ Public Class InvoiceHelper333
                 End Using
             Else
                 ' B2C Invoice Processing
-                qrCode = generalFunctions.ZATCA_GenerateQRCodeForXml(SignedXmlDocument)
+                'qrCode = generalFunctions.ZATCA_GenerateQRCodeForXml(SignedXmlDocument)
+                qrCode = ExtractQRCodeValue(SignedXmlDocument)
                 status = 1
                 apiResponse.errors = validationResult.errors
                 apiResponse.warnings = validationResult.warnings
@@ -839,6 +856,7 @@ Public Class InvoiceHelper333
             Dim TotalTaxSumHeader As Decimal = 0
             Dim MinusTotalDiscounTax As Decimal = 0
             Dim MaxTax As Decimal = 0
+            Dim TotalSumItem As Decimal = 0
 
             If invoiceData.InvoiceInfo.TotalTaxLC <> 0 Then
                 Dim TotalTaxHeader As Decimal = invoiceData.InvoiceInfo.TotalTaxLC
@@ -857,7 +875,7 @@ Public Class InvoiceHelper333
                 ' حساب الفرق
                 MinusTotalDiscounTax = finalDecimal - TotalTaxHeader
                 Dim MinusTotalDiscounTaxsub As Decimal = TotalTaxSumHeaderTwo - TotalTaxHeader
-
+                Dim itemMax As Decimal = 0
                 Dim grouped = invoiceData.Items.GroupBy(Function(i) New With {Key .TaxPerc = i.TaxPerc, Key .TaxExemption = i.TaxExemption})
 
                 If MinusTotalDiscounTaxsub <> 0 AndAlso MinusTotalDiscounTax <> 0 Then
@@ -866,11 +884,51 @@ Public Class InvoiceHelper333
                         MaxTax = groupItems.Max(Function(item) item.TaxAmount)
                         For Each item In groupItems
                             If item.TaxAmount = MaxTax Then
-                                item.TaxAmount -= MinusTotalDiscounTax
+                                itemMax = item.TaxAmount
+                                item.TaxAmount = Math.Round(item.TaxAmount, 2) - MinusTotalDiscounTax
                                 Exit For
                             End If
                         Next
                     Next
+
+                    Dim TotalSum2 As Decimal = 0
+                    Dim TotalSum3 As Decimal = 0
+                    For Each group In grouped
+                        Dim groupItems = group.ToList()
+                        For Each item In groupItems
+                            TotalSumItem += Math.Round(item.TaxAmount, 2)
+                            TotalSum3 += item.TaxAmount
+
+                        Next
+                    Next
+                    Dim s2 As Decimal = Math.Round(TotalSum3, 2)
+                    TotalSum2 = s2 - TotalTaxHeader
+                    If TotalSum2 <> 0 Then
+                        For Each group In grouped
+                            Dim groupItems = group.ToList()
+                            MaxTax = groupItems.Max(Function(item) item.TaxAmount)
+                            For Each item In groupItems
+                                If item.TaxAmount = MaxTax Then
+
+                                    item.TaxAmount = itemMax - MinusTotalDiscounTax
+                                    Exit For
+                                End If
+                            Next
+                        Next
+                        Dim TotalSum5 As Decimal = 0
+                        For Each group In grouped
+                            Dim groupItems = group.ToList()
+                            For Each item In groupItems
+                                TotalSum5 += item.TaxAmount
+                            Next
+                        Next
+
+                        Dim s As Decimal = Math.Round(TotalSum5, 2)
+
+                    End If
+
+
+
                 End If
             End If
 
@@ -952,18 +1010,6 @@ Public Class InvoiceHelper333
         Dim totalInfo As InvoiceInfo = invoiceData.InvoiceInfo
         Dim LegalMonetaryTotal = MapToTotalInfoB(totalInfo)
         invoiceElement = CreateAllowanceChargeElement(xmlDoc, LegalMonetaryTotal, invoiceElement, taxCatPercent, Result)
-
-
-
-
-
-
-
-
-
-
-
-
 
         ' Section (f)
         'Modfiy Ibrahim
@@ -2218,6 +2264,7 @@ Public Class InvoiceHelper333
         End Using
     End Function
 
+    'llllllllllllllllllll
 
 #End Region ' "HelperFunctions"
 

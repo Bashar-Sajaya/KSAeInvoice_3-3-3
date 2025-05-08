@@ -75,6 +75,7 @@
   <ItemGroup>
     <Compile Include="ExtractUBl.vb" />
     <Compile Include="GeneralFunctions333.vb" />
+    <Compile Include="Helper\SharedHelper.vb" />
     <Compile Include="InvoiceHelper333.vb" />
     <Compile Include="Models\AccountingCustomerPartyInfoB.vb" />
     <Compile Include="Models\AccountingSupplierPartyInfoB.vb" />
@@ -103,6 +104,8 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
+    <Compile Include="Utils\QueryDataBase.vb" />
+    <Compile Include="Utils\XmlPartCreate.vb" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="My Project\Resources.resx">
