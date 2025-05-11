@@ -75,12 +75,16 @@
   <ItemGroup>
     <Compile Include="ExtractUBl.vb" />
     <Compile Include="GeneralFunctions333.vb" />
+    <Compile Include="Helper\GeneralFunctions333.vb" />
+    <Compile Include="Helper\InvoiceHelper.vb" />
+    <Compile Include="Helper\SendInvoiceHelper.vb" />
     <Compile Include="Helper\SharedHelper.vb" />
     <Compile Include="InvoiceHelper333.vb" />
     <Compile Include="Models\AccountingCustomerPartyInfoB.vb" />
     <Compile Include="Models\AccountingSupplierPartyInfoB.vb" />
     <Compile Include="Models\CSRResult.vb" />
     <Compile Include="Models\DeliveryAndPaymentMeansInfoB.vb" />
+    <Compile Include="Models\EInvoiceResponse.vb" />
     <Compile Include="Models\InvoiceBasicInfoB.vb" />
     <Compile Include="Models\InvoiceData.vb" />
     <Compile Include="Models\InvoiceLineInfoB.vb" />
@@ -89,6 +93,7 @@
     <Compile Include="Models\ReportResult.vb" />
     <Compile Include="Models\Response.vb" />
     <Compile Include="Models\SourceItem.vb" />
+    <Compile Include="Models\UserAndSecret.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
       <AutoGen>True</AutoGen>
@@ -104,6 +109,8 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
+    <Compile Include="Utils\ExtractUBl.vb" />
+    <Compile Include="Utils\MapToModels.vb" />
     <Compile Include="Utils\QueryDataBase.vb" />
     <Compile Include="Utils\XmlPartCreate.vb" />
   </ItemGroup>

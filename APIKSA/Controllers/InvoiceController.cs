@@ -1,5 +1,4 @@
 ﻿using APIKSA.Models;
-using KSAeInvoiceHelper_3_3_3;
 using SJYtoolsLibrary.Services;
 using System;
 using System.Data.SqlClient;
@@ -7,6 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Http;
+using KSAeInvoiceHelper_3_3_3;
 
 namespace APIKSA.Controllers
 {
@@ -15,6 +15,9 @@ namespace APIKSA.Controllers
     {
         private static readonly HttpClient client = new HttpClient();
 
+        #region SendController
+
+        #region SendInvoiceA
         [HttpPost]
         [Route("sendA")]
         public async Task<HttpResponseMessage> SendInvoiceA([FromBody] InvoiceHelperInput input)
@@ -36,7 +39,7 @@ namespace APIKSA.Controllers
                     ? Request.CreateResponse(HttpStatusCode.OK, sendInvoiceResult)
                     : Request.CreateResponse(HttpStatusCode.BadRequest, sendInvoiceResult);
             }
-            catch (SystemException ex)
+            catch (APIKSA.Models.SystemException ex)
             {
                 return CreateBadRequestResponse(ex.Message, ex.ErrorSource);
             }
@@ -45,7 +48,9 @@ namespace APIKSA.Controllers
                 return CreateBadRequestResponse(ex.Message, 1);
             }
         }
+        #endregion
 
+        #region ReportInvoiceA
         [HttpPost]
         [Route("reportA")]
         public async Task<HttpResponseMessage> ReportInvoiceA([FromBody] ReportInvoiceInput input)
@@ -70,7 +75,7 @@ namespace APIKSA.Controllers
                     ? Request.CreateResponse(HttpStatusCode.OK, reportInvoiceResult)
                     : Request.CreateResponse(HttpStatusCode.BadRequest, reportInvoiceResult);
             }
-            catch (SystemException ex)
+            catch (APIKSA.Models.SystemException ex)
             {
                 return CreateBadRequestResponse(ex.Message, ex.ErrorSource);
             }
@@ -79,42 +84,61 @@ namespace APIKSA.Controllers
                 return CreateBadRequestResponse(ex.Message, 1);
             }
         }
+        #endregion
 
+        #region SendInvoiceAsync
+        private async Task<InvoiceResult> SendInvoiceAsync(InvoiceHelperInput input, string clientConnectionString, string commonConnectionString)
+        {
+            var invoiceHelper = new InvoiceHelpera(input.CompanyId, clientConnectionString, commonConnectionString, input.SajayaClientID);
+            return await invoiceHelper.SendInvoiceAsync(input.SubSajayaClientID, input.FiscalYearId, input.VoucherTypeId, input.VoucherNo, input.IsStandard, input.CompanyId, clientConnectionString, input.IsWarnings);
+
+
+        }
+        #endregion
+
+        #region ReportInvoiceAsync
+        private async Task<InvoiceResult> ReportInvoiceAsync(ReportInvoiceInput input, string clientConnectionString, string commonConnectionString)
+        {
+            var invoiceHelper = new InvoiceHelpera(input.CompanyId, clientConnectionString, commonConnectionString, input.SajayaClientID);
+            return await invoiceHelper.ReportPendingInvoiceAsync(input.VoucherId);
+        }
+
+
+
+        #endregion
+        #endregion
+
+        #region ConnectionHelper
+
+        #region ExtractAuthorizationToken
         private string ExtractAuthorizationToken()
         {
             var authorizationHeader = Request.Headers.Authorization;
             if (authorizationHeader == null || !authorizationHeader.Scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase))
             {
-                throw new SystemException("Authorization header is missing or invalid.", -4, null);
+                throw new APIKSA.Models.SystemException("Authorization header is missing or invalid.", -4, null);
             }
 
             return authorizationHeader.Parameter;
         }
+        #endregion
 
+        #region GetValidatedConnectionStringAsync
         private async Task<string> GetValidatedConnectionStringAsync(string subSajayaClientID, string username, string token)
         {
             string connectionString = await GetConnectionStringAsync(subSajayaClientID, token);
 
             if (!TestConnectionString(connectionString))
             {
-                throw new SystemException($"Invalid client data for user: {username}.", -2, null);
+                throw new APIKSA.Models.SystemException($"Invalid client data for user: {username}.", -2, null);
             }
 
             return connectionString;
         }
+        #endregion
 
-        private async Task<InvoiceResult> SendInvoiceAsync(InvoiceHelperInput input, string clientConnectionString, string commonConnectionString)
-        {
-            var invoiceHelper = new InvoiceHelper333(input.CompanyId, clientConnectionString, commonConnectionString, input.SajayaClientID);
-            return await invoiceHelper.SendInvoiceAsync( input.SubSajayaClientID,input.FiscalYearId, input.VoucherTypeId, input.VoucherNo, input.IsStandard, input.IsWarnings);
-        }
 
-        private async Task<InvoiceResult> ReportInvoiceAsync(ReportInvoiceInput input, string clientConnectionString, string commonConnectionString)
-        {
-            var invoiceHelper = new InvoiceHelper333(input.CompanyId, clientConnectionString, commonConnectionString, input.SajayaClientID);
-            return await invoiceHelper.ReportPendingInvoiceAsync(input.VoucherId);
-        }
-
+        #region ExtractAuthorizationToken
         private bool TestConnectionString(string connectionString)
         {
             try
@@ -131,7 +155,9 @@ namespace APIKSA.Controllers
                 return false;
             }
         }
+        #endregion
 
+        #region GetConnectionStringAsync
         private async Task<string> GetConnectionStringAsync(string sajayaClientID, string subToken)
         {
             client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", subToken);
@@ -141,7 +167,7 @@ namespace APIKSA.Controllers
             var encryptedResult = await response.Content.ReadAsStringAsync();
             if (encryptedResult == "Client is not authorized")
             {
-                throw new SystemException(encryptedResult, -3, null);
+                throw new APIKSA.Models.SystemException(encryptedResult, -3, null);
             }
 
             var authKey = GetAuthKey(sajayaClientID);
@@ -152,7 +178,9 @@ namespace APIKSA.Controllers
 
             return decryptedResult;
         }
+        #endregion
 
+        #region GetAuthKey
         private string GetAuthKey(string sajayaClientID)
         {
             const string query = @"
@@ -174,7 +202,9 @@ namespace APIKSA.Controllers
                 return cmd.ExecuteScalar() as string;
             }
         }
+        #endregion
 
+        #region UpdateInitialCatalogToTdCommon
         private string UpdateInitialCatalogToTdCommon(string connectionString)
         {
             if (string.IsNullOrEmpty(connectionString))
@@ -187,7 +217,9 @@ namespace APIKSA.Controllers
                 ? regex.Replace(connectionString, "Initial Catalog=tdCommon;")
                 : $"{connectionString}Initial Catalog=tdCommon;";
         }
+        #endregion
 
+        #region CreateBadRequestResponse
         private HttpResponseMessage CreateBadRequestResponse(string message, int errorSource)
         {
             var response = new Response
@@ -198,17 +230,9 @@ namespace APIKSA.Controllers
             };
             return Request.CreateResponse(HttpStatusCode.BadRequest, response);
         }
+        #endregion
+        #endregion
 
-        public class SystemException : Exception
-        {
-            public int ErrorSource { get; }
-
-            public SystemException(string message, int errorSource, Exception innerException)
-                : base(message, innerException)
-            {
-                ErrorSource = errorSource;
-            }
-        }
     }
 }
 

@@ -149,6 +149,7 @@
     <Compile Include="Models\EncryptedPayloadRequest.cs" />
     <Compile Include="Models\InvoiceHelperInput.cs" />
     <Compile Include="Models\ReportInvoiceInput.cs" />
+    <Compile Include="Models\SystemException.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Utils\ClsCryptoAes.cs" />
   </ItemGroup>
@@ -162,7 +163,6 @@
       <DependentUpon>Web.config</DependentUpon>
     </Content>
   </ItemGroup>
-  <ItemGroup />
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="Properties\PublishProfiles\IISProfile37.pubxml" />
