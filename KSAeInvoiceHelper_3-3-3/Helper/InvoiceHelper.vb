@@ -114,9 +114,10 @@ Public Class InvoiceHelpera
                             .ByerCountryCode = If(reader("ByerCountryCode") Is DBNull.Value, String.Empty, reader("ByerCountryCode").ToString()),
                             .BuyerIsTaxable = reader("IsTaxable"),
                             .CatID2 = If(reader("CatID") Is DBNull.Value, 0, Convert.ToInt32(reader("CatID"))),
-                            .ModuleID = If(reader("ModuleID") Is DBNull.Value, 0, Convert.ToInt32(reader("ModuleID")))
+                            .ModuleID = If(reader("ModuleID") Is DBNull.Value, 0, Convert.ToInt32(reader("ModuleID"))),
+                            .InstructionNote = If(reader("InvoiceDesc") Is DBNull.Value, String.Empty, reader("InvoiceDesc").ToString())
                         }
-
+                        'des
                         invoiceData.InvoiceInfo = invoiceInfo
 
                     Else
@@ -197,6 +198,18 @@ Public Class InvoiceHelpera
                 End Using
             End If
 
+
+            If Not String.IsNullOrEmpty(SourceinvoiceData.InstructionNote) Then
+
+                invoiceData.InvoiceInfo.InstructionNote = SourceinvoiceData.InstructionNote
+
+            Else
+                invoiceData.InvoiceInfo.InstructionNote = ""
+
+            End If
+
+
+
             Dim invoiceDataNew = UpdateInvoiceData(invoiceData)
 
             Dim invoiceDataNewTax = UpdateInvoiceDataTax(invoiceDataNew)
@@ -253,69 +266,67 @@ Public Class InvoiceHelpera
 
     Public Function UpdateInvoiceDataTax(invoiceData As InvoiceData) As InvoiceData
         Try
-            Dim totalTaxFromHeader As Decimal = invoiceData.InvoiceInfo.TotalTaxLC
-            If totalTaxFromHeader = 0 Then Return invoiceData
+            Dim expectedTaxTotal As Decimal = invoiceData.InvoiceInfo.TotalTaxLC
+            If expectedTaxTotal = 0 Then Return invoiceData
+            ' مجموع الضريبة بعد التقريب للمجموعات
+            Dim groupedRoundedTaxSums As New List(Of Decimal)
 
-            ' مجموع الضريبة الأصلي من العناصر بدون تقريب
-            Dim totalTaxRaw As Decimal = invoiceData.Items.Sum(Function(item) item.TaxAmount)
+            Dim groupedItems = invoiceData.Items.GroupBy(Function(i) New With {
+            Key i.TaxPerc,
+            Key i.TaxExemption
+        })
 
-            'تقريب لمجموع الضريبه 
-            Dim totalTaxRawSumRound As Decimal = Math.Round(totalTaxRaw, 2)
-            ' مجموع الضريبة بعد التقريب
-            Dim totalTaxRoundedSum As Decimal = invoiceData.Items.Sum(Function(item) Math.Round(item.TaxAmount, 2))
+            For Each group In groupedItems
+                Dim groupSum As Decimal = group.Sum(Function(i) i.TaxAmount)
+                Dim roundedGroupSum As Decimal = Math.Round(groupSum, 2)
+                groupedRoundedTaxSums.Add(roundedGroupSum)
+            Next
 
+            Dim actualRoundedTotal As Decimal = groupedRoundedTaxSums.Sum()
 
-            Dim diffAfterRound2 As Decimal = totalTaxRoundedSum - totalTaxFromHeader
+            Dim diffBetweenGroupRoundAndHeader As Decimal = actualRoundedTotal - expectedTaxTotal
 
-            Dim diffAfterRound As Decimal = totalTaxRawSumRound - totalTaxFromHeader
+            ' فقط إذا كان هناك فرق واضح أكثر من 0.01
+            If Math.Abs(diffBetweenGroupRoundAndHeader) >= 0.01D AndAlso actualRoundedTotal <> 0 Then
+                Dim groupedToAdjust = invoiceData.Items.GroupBy(Function(i) New With {Key i.TaxPerc, Key i.TaxExemption})
 
-
-            'فقط اذا كان هناك فرق واضح اكثر من 
-            '0.001
-            If Math.Abs(diffAfterRound) > 0.001D Then
-                ' نجمع العناصر حسب نسبة الضريبة والإعفاء
-                Dim grouped = invoiceData.Items.GroupBy(Function(i) New With {Key i.TaxPerc, Key i.TaxExemption})
-                Dim max As Decimal = 0
-                ' نبحث عن العنصر صاحب أكبر ضريبة في أول مجموعة
-                For Each group In grouped
+                For Each group In groupedToAdjust
                     Dim groupItems = group.ToList()
                     Dim maxTaxItem = groupItems.OrderByDescending(Function(item) item.TaxAmount).FirstOrDefault()
-                    max = maxTaxItem.TaxAmount
-                    If maxTaxItem IsNot Nothing Then
-                        ' نطرح الفرق من الضريبة الأكبر
 
-                        maxTaxItem.TaxAmount = TruncateDecimal(maxTaxItem.TaxAmount, 2) - diffAfterRound
+                    If maxTaxItem IsNot Nothing Then
+                        maxTaxItem.TaxAmount = TruncateDecimal(maxTaxItem.TaxAmount, 2) - diffBetweenGroupRoundAndHeader
                     End If
                     Exit For
                 Next
 
-                ' التحقق النهائي: إعادة جمع الضرائب بعد التعديل
-                Dim newTotal As Decimal = invoiceData.Items.Sum(Function(i) i.TaxAmount)
-                Dim newTotal2 As Decimal = Math.Round(newTotal, 2)
-                Dim finalDiff As Decimal = newTotal2 - totalTaxFromHeader
+                ' إعادة التحقق بعد التعديل
+                Dim adjustedTotalTax As Decimal = invoiceData.Items.Sum(Function(i) i.TaxAmount)
+                Dim adjustedTotalTaxRounded As Decimal = Math.Round(adjustedTotalTax, 2)
+                Dim remainingDiff As Decimal = adjustedTotalTaxRounded - expectedTaxTotal
 
-                ' إذا بقي فرق صغير، نعالجه بنفس الطريقة
-                '
-                '    If Math.Abs(finalDiff) > 0.001D Then
-                '        For Each group In grouped
-                '            Dim groupItems = group.ToList()
-                '            Dim maxTaxItem = groupItems.OrderByDescending(Function(item) item.TaxAmount).FirstOrDefault()
+                If Math.Abs(remainingDiff) > 0.001D Then
+                    For Each group In groupedToAdjust
+                        Dim groupItems = group.ToList()
+                        Dim maxTaxItem = groupItems.OrderByDescending(Function(item) item.TaxAmount).FirstOrDefault()
 
-                '            If maxTaxItem IsNot Nothing Then
-                '                maxTaxItem.TaxAmount = maxTaxItem.TaxAmount - finalDiff
-                '            End If
-                '            Exit For
-                '        Next
-                '    End If
+                        If maxTaxItem IsNot Nothing Then
+                            maxTaxItem.TaxAmount = maxTaxItem.TaxAmount - remainingDiff
+                        End If
+                        Exit For
+                    Next
+                End If
             End If
-            Dim newTotalfinal As Decimal = invoiceData.Items.Sum(Function(i) i.TaxAmount)
-            Dim newTotalfinal2 As Decimal = Math.Round(newTotalfinal, 2)
+
+            Dim finalTaxSum As Decimal = invoiceData.Items.Sum(Function(i) i.TaxAmount)
+            Dim finalTaxSumRounded As Decimal = Math.Round(finalTaxSum, 2)
 
             Return invoiceData
         Catch ex As Exception
             Return invoiceData
         End Try
     End Function
+
 #End Region
 
 #Region "UpdateInvoiceData"
@@ -330,6 +341,22 @@ Public Class InvoiceHelpera
                 Dim TotalDiscountHeader As Decimal = invoiceData.InvoiceInfo.TotalDiscountLC
 
                 ' حساب مجموع الخصومات من العناصر
+                'هون جديد
+                Dim roundedGroupTotals As New List(Of Decimal)
+
+                Dim groupedheader = invoiceData.Items.GroupBy(Function(i) New With {
+                    Key i.TaxPerc,
+                    Key i.TaxExemption
+                        })
+
+                For Each group In groupedheader
+                    Dim groupSum As Decimal = group.Sum(Function(i) i.HeaderDisount)
+                    Dim rounded As Decimal = Math.Round(groupSum, 2)
+                    roundedGroupTotals.Add(rounded)
+                Next
+
+                Dim finalTotal As Decimal = roundedGroupTotals.Sum()
+
                 TotalDiscountSumHeader = invoiceData.Items.Sum(Function(item) item.HeaderDisount)
 
                 ' تقطيع الخصومات إلى منزلتين عشريتين
@@ -338,7 +365,9 @@ Public Class InvoiceHelpera
                 Dim finalDecimal As Decimal = Decimal.Parse(result)
 
                 ' حساب الفرق
-                MinusTotalDiscoun = finalDecimal - TotalDiscountHeader
+                'MinusTotalDiscoun = finalDecimal - TotalDiscountHeader
+                'new
+                MinusTotalDiscoun = finalTotal - TotalDiscountHeader
 
                 If MinusTotalDiscoun <> 0 Then
                     Dim foundZeroPercent As Boolean = False
@@ -346,8 +375,8 @@ Public Class InvoiceHelpera
                     ' محاولة توزيع الفرق على عنصر ضريبته 0
                     For Each item In invoiceData.Items
                         If item.TaxPerc = 0 Then
-                            item.HeaderDisount -= MinusTotalDiscoun
-                            item.TotalPriceLC += MinusTotalDiscoun
+                            item.HeaderDisount = item.HeaderDisount - MinusTotalDiscoun
+                            item.TotalPriceLC = item.TotalPriceLC + MinusTotalDiscoun
                             foundZeroPercent = True
                             Exit For
                         End If
@@ -358,8 +387,8 @@ Public Class InvoiceHelpera
                         MaxDiscount = invoiceData.Items.Max(Function(item) item.HeaderDisount)
                         For Each item In invoiceData.Items
                             If item.HeaderDisount = MaxDiscount Then
-                                item.HeaderDisount -= MinusTotalDiscoun
-                                item.TotalPriceLC += MinusTotalDiscoun
+                                item.HeaderDisount = item.HeaderDisount - MinusTotalDiscoun
+                                item.TotalPriceLC = item.TotalPriceLC + MinusTotalDiscoun
                                 Exit For
                             End If
                         Next
@@ -483,7 +512,8 @@ Public Class InvoiceHelpera
             If validationResult.success = False Then
                 Dim jsonString As String = JsonConvert.SerializeObject(validationResult, Newtonsoft.Json.Formatting.Indented)
                 If Not SharedHelper.ValidateJson(jsonString, IsWarnings) Then
-                    validationResult.ErrorMessage = "Local Validation: Please note that the error with code KSA-13 (if exists) is generated exclusively during local validation."
+                    ' validationResult.ErrorMessage = "Local Validation: Please note that the error with code KSA-13 (if exists) is generated exclusively during local validation."
+
                     Return validationResult
                 End If
             End If
@@ -543,7 +573,8 @@ Public Class InvoiceHelpera
                 apiResponse.errors = SharedHelper.ValidateJsonB2C(apiResponse.errors)
 
                 '??
-                apiResponse.ErrorMessage = $"Local Validation: {warningsStr}Please note that the error with code KSA-13 (if exists) is generated exclusively during local validation."
+                '  apiResponse.ErrorMessage = $"Local Validation: {warningsStr}Please note that the error with code KSA-13 (if exists) is generated exclusively during local validation."
+
             End If
 
             If status = 1 Then

@@ -272,9 +272,10 @@ Public Class XmlPartCreate
         ActualDeliveryDate.InnerText = info.ActualDeliveryDate
         DeliveryElement.AppendChild(ActualDeliveryDate)
 
-        Dim LatestDeliveryDate As XmlElement = xmlDoc.CreateElement("cbc:LatestDeliveryDate", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-        LatestDeliveryDate.InnerText = info.LatestDeliveryDate
-        DeliveryElement.AppendChild(LatestDeliveryDate)
+        'ممكن في المستقبل نستخدمها
+        'Dim LatestDeliveryDate As XmlElement = xmlDoc.CreateElement("cbc:LatestDeliveryDate", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
+        'LatestDeliveryDate.InnerText = info.LatestDeliveryDate
+        'DeliveryElement.AppendChild(LatestDeliveryDate)
 
         Return DeliveryElement
     End Function
@@ -289,9 +290,9 @@ Public Class XmlPartCreate
         ' Include InstructionNote if provided
         'QAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
-        If Not String.IsNullOrEmpty(info.Note) Then
+        If Not String.IsNullOrEmpty(info.InstructionNote) Then
             Dim InstructionNoteElement As XmlElement = xmlDoc.CreateElement("cbc:InstructionNote", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
-            InstructionNoteElement.InnerText = info.Note
+            InstructionNoteElement.InnerText = info.InstructionNote
             PaymentMeansElement.AppendChild(InstructionNoteElement)
         End If
 

@@ -65,6 +65,8 @@ Public Class InvoiceInfo
     'Modify Ibrahim 
     Public Property CatID2 As Int32
 
+    Public Property InstructionNote As String
+
     Public Property ModuleID As Int32
 
 End Class
@@ -97,6 +99,8 @@ Public Class ItemInfo
     Public Property SourceVoucherNo As Int32
 
     Public Property SourceStr As String
+
+
 
     'Public Property TaxType As String
     '--------------------------------------------------'
@@ -131,4 +135,7 @@ Public Structure SourceInvoiceInfo
     Public Property SourceVoucherID As String
     Public Property SourceUUID As String
     Public Property SourceTotalInvoiceLC As Decimal?
+
+    Public Property InstructionNote As String
+
 End Structure

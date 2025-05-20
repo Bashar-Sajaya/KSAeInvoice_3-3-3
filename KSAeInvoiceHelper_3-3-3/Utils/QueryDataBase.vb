@@ -61,7 +61,7 @@ SELECT        QHeaderInfo.InvType, T_Customers_1.CustomerNo AS ByerID, CAST(@Com
                          QHeaderInfo.InvoiceDesc, QHeaderInfo.Note, 100 * (CASE WHEN TotalBeforeTaxLC = 0 THEN 0 ELSE ROUND(TotalTaxLC / TotalBeforeTaxLC, 2) END) AS TaxCategoryPercent, ISNULL(T_Customers_1.IsTaxable, 0) AS IsTaxable,
                           T_SYSVoucherTypes_3.CatID, T_SYSVoucherTypes_3.CatNameA, T_SYSVoucherTypes_3.CatNameE, T_SYSVoucherTypes_3.ModuleID
 FROM            (SELECT        CASE WHEN CatId <> 10 THEN 0 ELSE 2 END AS InvType, StrVoucherHeader.FiscalYearID, StrVoucherHeader.VoucherTypeID, StrVoucherHeader.VoucherNo, StrVoucherHeader.CustNo, 
-                                                    StrVoucherHeader.VoucherDateTime AS VoucherDate, StrVoucherHeader.DeliveryDate, StrVoucherHeader.DueDate, StrVoucherHeader.TimeStamp, StrVoucherHeader.NetInvoiceLC, 
+                                                    (CASE WHEN CatId=9 THEN StrVoucherHeader.VoucherDateTime else  (DATEADD(Second, (DATEPART(Second, StrVoucherHeader.TimeStamp)  + DATEPART(Minute, StrVoucherHeader.TimeStamp) * 60) + DATEPART(Hour, StrVoucherHeader.TimeStamp) * 3600, CAST(VoucherDate AS DATETIME)))  END) AS VoucherDate, StrVoucherHeader.DeliveryDate, StrVoucherHeader.DueDate, StrVoucherHeader.TimeStamp, StrVoucherHeader.NetInvoiceLC, 
                                                     StrVoucherHeader.TotalDiscountLC, StrVoucherHeader.TotalExpencesLC, StrVoucherHeader.TotalTaxLC, StrVoucherHeader.TotalBeforeTaxLC, StrVoucherHeader.TotalInvoiceLC, StrVoucherHeader.Note, 
                                                     StrVoucherHeader.InvoiceDesc, StrVoucherHeader.VoucherID, T_SYSVoucherTypes.CatID, StrVoucherHeader.DeliveryAddress
                           FROM            StrVoucherHeader INNER JOIN
@@ -184,15 +184,15 @@ FROM            (SELECT myID, UnitCode,ItemName,  InvoiceQty,  PriceAmount * Exc
                   ISNULL(TaxExemption, '') AS TaxExemption,SourceFiscalYearID,SourceVoucherTypeID,SourceVoucherNo
 				  , QDetailsInfo.SourceStr,@VoucherTypeID As VoucherTypeID
 FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmount, TaxAmount, ((PriceAmount * InvoiceQty * ExchangePrice ) - ( TotalRowDiscount  * ExchangePrice)) + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
-                                    TaxExemption,SourceFiscalYearID,SourceVoucherTypeID,SourceVoucherNo,'' AS SourceStr
+                                    TaxExemption,SourceFiscalYearID,SourceVoucherTypeID,SourceVoucherNo, SourceStr
                   FROM      (SELECT myID, UnitCode, InvoiceQty,ISNULL(DiscountValue, 0) As TotalRowDiscount , ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, (ISNULL(InvoiceQty, 0) 
                                                        * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0))) * ISNULL(TaxPerc, 0) AS TaxAmount, ISNULL(TaxPerc, 0) * 100 AS TaxCategoryPercent, ItemName, 
-                                                       PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption,SourceFiscalYearID,SourceVoucherTypeID,SourceVoucherNo
+                                                       PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption,SourceFiscalYearID,SourceVoucherTypeID,SourceVoucherNo,SourceStr
                                      FROM      (SELECT StrVoucherDetails_2.RowNo AS myID, ISNULL(ISNULL(StrUnits.UnitCodeE, StrUnits.UnitCodeA), 'PCE') AS UnitCode, StrVoucherDetails_2.Qty AS InvoiceQty, StrVoucherDetails_2.ItemDesc AS ItemName, 
                                                                         case when IsNull(MainRowNo,0) = 0 then  StrVoucherDetails_2.Price else StrVoucherDetails_2.KitItemPrice end AS PriceAmount, ISNULL(StrVoucherDetails_2.TotalDiscount, 0) AS DiscountValue, 
                                                                           CASE WHEN NetInvoice <> 0 THEN TotalPriceWithKitAfterDiscount / NetInvoice ELSE 0 END AS ItemPerc, SysAddresses_2.TaxTypeID, StrVoucherHeader_2.TotalInvoice, 
                                                                           StrVoucherHeader_2.TotalDiscount AS headerDiscount, StrVoucherHeader_2.TotalTax AS headerTax, SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, StrVoucherHeader_2.ExchangePrice, 
-                                                                          SysTaxTypes_1.TaxExemption,StrVoucherDetails_2.SourceFiscalYearID,StrVoucherDetails_2.SourceVoucherTypeID,StrVoucherDetails_2.SourceVoucherNo
+                                                                          SysTaxTypes_1.TaxExemption,StrVoucherDetails_2.SourceFiscalYearID,StrVoucherDetails_2.SourceVoucherTypeID,StrVoucherDetails_2.SourceVoucherNo,StrVoucherHeader_2.Note AS SourceStr
                                                         FROM      StrVoucherHeader AS StrVoucherHeader_2 INNER JOIN
                                                                           StrVoucherDetails AS StrVoucherDetails_2 ON StrVoucherHeader_2.FiscalYearID = StrVoucherDetails_2.FiscalYearID AND StrVoucherHeader_2.VoucherTypeID = StrVoucherDetails_2.VoucherTypeID AND 
                                                                           StrVoucherHeader_2.VoucherNo = StrVoucherDetails_2.VoucherNo INNER JOIN
@@ -228,16 +228,16 @@ FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmoun
                                                        WHERE   (RecInvoiceHeader_2.FiscalYearID = @FiscalyearID) AND (RecInvoiceHeader_2.InvoiceTypeID = @voucherTypeId) AND (RecInvoiceHeader_2.InvoiceNo = @voucherNo)) AS QSaleInfo_4) AS QDetailsInfo
                   UNION ALL
                   SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
-                                    TaxExemption,SourceFiscalYearID ,	SourceVoucherTypeID, SourceVoucherNo,'' As SourceStr
+                                    TaxExemption,SourceFiscalYearID ,	SourceVoucherTypeID, SourceVoucherNo, SourceStr
                   FROM     (SELECT myID, UnitCode, InvoiceQty,ISNULL(DiscountValue, 0) As TotalRowDiscount, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, IsTaxable * (ISNULL(InvoiceQty, 0) 
                                                       * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0))) * ISNULL(TaxPerc, 0) AS TaxAmount, IsTaxable * ISNULL(TaxPerc, 0) * 100 AS TaxCategoryPercent, ItemName, 
-                                                      PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption,SourceFiscalYearID ,	SourceVoucherTypeID, SourceVoucherNo
+                                                      PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption,SourceFiscalYearID ,	SourceVoucherTypeID, SourceVoucherNo,SourceStr
                                     FROM      (SELECT SchStudentTrans_2.RowNo AS myID, 'PCE' AS UnitCode, 1 AS InvoiceQty, ISNULL(SchFees.FeesNameE, SchFees.FeesNameA) AS ItemName, SchRegSemesters.FeesAmount AS PriceAmount, 
                                                                          ISNULL(QryDiscount.TotalDiscount, 0) AS DiscountValue, CASE WHEN NetInvoice <> 0 THEN Amount / NetInvoice ELSE 0 END AS ItemPerc, 1 AS TaxTypeID, SchRegistrationVoucherHeader_2.TotalInvoice, 
                                                                          SchRegistrationVoucherHeader_2.TotalDiscount AS headerDiscount, SchRegistrationVoucherHeader_2.TotalTax AS headerTax, SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, 
                                                                          CASE WHEN SchStudentTrans_2.FeesID <> 0 THEN CASE WHEN SchFees.istaxable = 2 THEN 1 ELSE SchFees.istaxable END ELSE 1 END AS IsTaxable, 
                                                                          (CASE WHEN SchRegistrationVoucherHeader_2.CalculateType = 1 THEN 1 / SchRegistrationVoucherHeader_2.ExchangeRate ELSE SchRegistrationVoucherHeader_2.ExchangeRate END) AS ExchangePrice, 
-                                                                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption,0 as SourceFiscalYearID ,0 as 	SourceVoucherTypeID,0 as SourceVoucherNo
+                                                                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption,0 as SourceFiscalYearID ,0 as 	SourceVoucherTypeID,0 as SourceVoucherNo,SchRegistrationVoucherHeader_2.Note as SourceStr
                                                        FROM      SchFees RIGHT OUTER JOIN
                                                                          SchRegSemesters INNER JOIN
                                                                          SchRegistrationVoucherHeader AS SchRegistrationVoucherHeader_2 INNER JOIN
@@ -262,7 +262,7 @@ FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmoun
                                                                          SchRegistrationVoucherHeader_2.TotalInvoice, SchRegistrationVoucherHeader_2.TotalDiscount AS headerDiscount, SchRegistrationVoucherHeader_2.TotalTax AS headerTax, 
                                                                          SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, CASE WHEN SchStudentTrans_2.FeesID <> 0 THEN CASE WHEN SchFees.istaxable = 2 THEN 1 ELSE SchFees.istaxable END ELSE 1 END AS IsTaxable, 
                                                                          (CASE WHEN SchRegistrationVoucherHeader_2.CalculateType = 1 THEN 1 / SchRegistrationVoucherHeader_2.ExchangeRate ELSE SchRegistrationVoucherHeader_2.ExchangeRate END) AS ExchangePrice, 
-                                                                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption,0 as SourceFiscalYearID ,0 as 	SourceVoucherTypeID,0 as SourceVoucherNo
+                                                                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption,0 as SourceFiscalYearID ,0 as 	SourceVoucherTypeID,0 as SourceVoucherNo,SchRegistrationVoucherHeader_2.note As SourceStr
                                                        FROM     SchRegSemesters INNER JOIN
                                                                          SchRegistrationVoucherHeader AS SchRegistrationVoucherHeader_2 INNER JOIN
                                                                          SchStudentTrans AS SchStudentTrans_2 ON SchRegistrationVoucherHeader_2.FiscalYearID = SchStudentTrans_2.FiscalYearID AND 
@@ -277,33 +277,33 @@ FROM     (SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmoun
                                                        WHERE  (SchRegistrationVoucherHeader_2.FiscalYearID = @FiscalyearID) AND (SchRegistrationVoucherHeader_2.VoucherTypeID = @voucherTypeId) AND 
                                                                          (SchRegistrationVoucherHeader_2.VoucherNo = @voucherNo)
                                                        UNION ALL
-                                                       SELECT SchRegRetractionVoucherDetails.RowNo AS myID, 'PCE' AS UnitCode, 1 AS InvoiceQty, ISNULL(SchFees.FeesNameE, SchFees.FeesNameA) AS ItemName, 
-                                                                         SchRegRetractionVoucherDetails.Recovered AS PriceAmount, SchRegRetractionVoucherDetails.DiscountAmount + ISNULL(SchRegRetractionVoucherDetails.DiscountRetraction, 0) AS DiscountValue, 
-                                                                         CASE WHEN NetInvoice <> 0 THEN SchRegRetractionVoucherDetails.FeesAmount / NetInvoice ELSE 0 END AS ItemPerc, 1 AS TaxTypeID, SchRegistrationVoucherHeader_2.TotalInvoice, 
-                                                                         SchRegistrationVoucherHeader_2.TotalDiscount AS headerDiscount, SchRegistrationVoucherHeader_2.TotalTax AS headerTax, SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, 
-                                                                         CASE WHEN SchRegRetractionVoucherDetails.FeesID <> 0 THEN CASE WHEN SchFees.istaxable = 2 THEN 1 ELSE SchFees.istaxable END ELSE 1 END AS IsTaxable, 
-                                                                         (CASE WHEN SchRegistrationVoucherHeader_2.CalculateType = 1 THEN 1 / SchRegistrationVoucherHeader_2.ExchangeRate ELSE SchRegistrationVoucherHeader_2.ExchangeRate END) AS ExchangePrice, 
-                                                                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption,SchRegRetractionVoucherDetails.SourceFiscalYearID,SchRegRetractionVoucherDetails.SourceVoucherTypeID,SchRegRetractionVoucherDetails.SourceVoucherNo
-                                                       FROM     SchFees RIGHT OUTER JOIN
-                                                                         SchRegistrationVoucherHeader AS SchRegistrationVoucherHeader_2 INNER JOIN
-                                                                         SchRegRetractionVoucherDetails ON SchRegistrationVoucherHeader_2.FiscalYearID = SchRegRetractionVoucherDetails.FiscalYearID AND 
-                                                                         SchRegistrationVoucherHeader_2.VoucherTypeID = SchRegRetractionVoucherDetails.VoucherTypeID AND 
-                                                                         SchRegistrationVoucherHeader_2.VoucherNo = SchRegRetractionVoucherDetails.VoucherNo INNER JOIN
-                                                                         SysVoucherTypes ON SchRegistrationVoucherHeader_2.VoucherTypeID = SysVoucherTypes.VoucherTypeID ON SchFees.FeesID = SchRegRetractionVoucherDetails.FeesID LEFT OUTER JOIN
-                                                                         SysTaxTypes AS SysTaxTypes_1 ON SchFees.TaxID = SysTaxTypes_1.TaxID
+                                                       SELECT        SchRegRetractionVoucherDetails.RowNo AS myID, 'PCE' AS UnitCode, 1 AS InvoiceQty, ISNULL(SchFees.FeesNameE, SchFees.FeesNameA) AS ItemName, SchRegRetractionVoucherDetails.Recovered AS PriceAmount, 
+                         SchRegRetractionVoucherDetails.DiscountAmount + ISNULL(SchRegRetractionVoucherDetails.DiscountRetraction, 0) AS DiscountValue, 
+                         CASE WHEN NetInvoice <> 0 THEN SchRegRetractionVoucherDetails.FeesAmount / NetInvoice ELSE 0 END AS ItemPerc, 1 AS TaxTypeID, SchRegistrationVoucherHeader_2.TotalInvoice, 
+                         SchRegistrationVoucherHeader_2.TotalDiscount AS headerDiscount, SchRegistrationVoucherHeader_2.TotalTax AS headerTax, SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, 
+                         CASE WHEN SchRegRetractionVoucherDetails.FeesID <> 0 THEN CASE WHEN SchFees.istaxable = 2 THEN 1 ELSE SchFees.istaxable END ELSE 1 END AS IsTaxable, 
+                         (CASE WHEN SchRegistrationVoucherHeader_2.CalculateType = 1 THEN 1 / SchRegistrationVoucherHeader_2.ExchangeRate ELSE SchRegistrationVoucherHeader_2.ExchangeRate END) AS ExchangePrice, 
+                         SysTaxTypes_1.TaxID, SysTaxTypes_1.TaxExemption, SchRegRetractionVoucherDetails.SourceFiscalYearID, SchRegRetractionVoucherDetails.SourceVoucherTypeID, SchRegRetractionVoucherDetails.SourceVoucherNo, 
+                         SchRegistrationVoucherHeader_2.Note AS SourceStr
+FROM            SysTaxTypes AS SysTaxTypes_1 RIGHT OUTER JOIN
+                         SchRegistrationVoucherHeader AS SchRegistrationVoucherHeader_2 INNER JOIN
+                         SchRegRetractionVoucherDetails ON SchRegistrationVoucherHeader_2.FiscalYearID = SchRegRetractionVoucherDetails.FiscalYearID AND 
+                         SchRegistrationVoucherHeader_2.VoucherTypeID = SchRegRetractionVoucherDetails.VoucherTypeID AND SchRegistrationVoucherHeader_2.VoucherNo = SchRegRetractionVoucherDetails.VoucherNo INNER JOIN
+                         SysVoucherTypes ON SchRegistrationVoucherHeader_2.VoucherTypeID = SysVoucherTypes.VoucherTypeID ON SysTaxTypes_1.TaxID = SchRegRetractionVoucherDetails.TaxID LEFT OUTER JOIN
+                         SchFees ON SchRegRetractionVoucherDetails.FeesID = SchFees.FeesID
                                                        WHERE  (SysVoucherTypes.CatID = 6) AND (SchRegistrationVoucherHeader_2.FiscalYearID = @FiscalyearID) AND (SchRegistrationVoucherHeader_2.VoucherTypeID = @voucherTypeId) AND 
                                                                          (SchRegistrationVoucherHeader_2.VoucherNo = @voucherNo)) AS QSaleInfo_4) AS QDetailsInfo
                   UNION ALL
                   SELECT myID, UnitCode, InvoiceQty,TotalRowDiscount, LineExtensionAmount, TaxAmount, LineExtensionAmount + TaxAmount AS RoundingAmount, TaxCategoryPercent, ItemName, PriceAmount, AlowanceChargeAmount, ExchangePrice, 
-                                    TaxExemption,0 as SourceFiscalYearID ,0 as 	SourceVoucherTypeID,0 as SourceVoucherNo,'' AS SourceStr
+                                    TaxExemption,0 as SourceFiscalYearID ,0 as 	SourceVoucherTypeID,0 as SourceVoucherNo, SourceStr
                   FROM     (SELECT myID, UnitCode, InvoiceQty,ISNULL(DiscountValue, 0) As TotalRowDiscount, ISNULL(InvoiceQty, 0) * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0)) AS LineExtensionAmount, IsTaxable * (ISNULL(InvoiceQty, 0) 
                                                       * ISNULL(PriceAmount, 0) - (ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0))) * ISNULL(TaxPerc, 0) AS TaxAmount, IsTaxable * ISNULL(TaxPerc, 0) * 100 AS TaxCategoryPercent, ItemName, 
-                                                      PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption
+                                                      PriceAmount, ISNULL(DiscountValue, 0) + ISNULL(headerDiscount, 0) * ISNULL(ItemPerc, 0) AS AlowanceChargeAmount, ExchangePrice, TaxExemption,SourceStr
                                     FROM      (SELECT AstVoucherDetails_2.RowNo AS myID, ISNULL(ISNULL(StrUnits.UnitCodeE, StrUnits.UnitCodeA), 'PCE') AS UnitCode, 1 AS InvoiceQty, ISNULL(AstAssets.AssetNameE, AstAssets.AssetNameA) AS ItemName, 
                                                                          AstVoucherDetails_2.Price AS PriceAmount, ISNULL(AstVoucherDetails_2.TotalDiscount, 0) AS DiscountValue, CASE WHEN NetInvoice <> 0 THEN Price / NetInvoice ELSE 0 END AS ItemPerc, 
                                                                          SysAddresses_2.TaxTypeID, AstVoucherHeader_2.TotalInvoice, AstVoucherHeader_2.TotalDiscount AS headerDiscount, AstVoucherHeader_2.TotalTax AS headerTax, 
                                                                          SysTaxTypes_1.TaxAmount / 100 AS TaxPerc, (CASE WHEN CalculatType = 1 THEN 1 / ExchangeRate ELSE ExchangeRate END) AS ExchangePrice, CASE WHEN AstVoucherDetails_2.AssetCode <> NULL 
-                                                                         THEN AstAssets.istaxable ELSE 1 END AS IsTaxable, SysTaxTypes_1.TaxExemption
+                                                                         THEN AstAssets.istaxable ELSE 1 END AS IsTaxable, SysTaxTypes_1.TaxExemption,AstVoucherHeader_2.Note As SourceStr
                                                        FROM      AstVoucherHeader AS AstVoucherHeader_2 INNER JOIN
                                                                          AstVoucherDetails AS AstVoucherDetails_2 ON AstVoucherHeader_2.FiscalYearID = AstVoucherDetails_2.FiscalYearID AND AstVoucherHeader_2.VoucherTypeID = AstVoucherDetails_2.VoucherTypeID AND 
                                                                          AstVoucherHeader_2.VoucherNo = AstVoucherDetails_2.VoucherNo LEFT OUTER JOIN

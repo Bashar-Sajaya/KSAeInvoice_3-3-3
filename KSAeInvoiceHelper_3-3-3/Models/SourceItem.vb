@@ -4,4 +4,6 @@
     Public Property SourceVoucherTypeID As Integer?
     Public Property SourceVoucherNo As Integer?
 
+    Public Property InstructionNote As String
+
 End Class

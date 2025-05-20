@@ -4,6 +4,6 @@
     Public Property PaymentMeansCode As String
 
     'modify Ibrahim
-    Public Property Note As String
+    Public Property InstructionNote As String
 
 End Class

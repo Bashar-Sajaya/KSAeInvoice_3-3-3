@@ -3,11 +3,11 @@
 #Region "MapToInvoiceBasicInfoB"
     Public Shared Function MapToInvoiceBasicInfoB(invoiceInfo As InvoiceInfo, isStandard As Boolean, pih As String, _sajayaClientID As String, nextCounter As Integer, SourceVoucherID As String) As InvoiceBasicInfoB
         Dim currentDateTime As DateTime = DateTime.Now
-
+        'currentDateTime.ToString("yyyy-MM-dd"),
         Return New InvoiceBasicInfoB With {
         .ID = invoiceInfo.VoucherID,
         .UUID = SharedHelper.GenerateUUID(_sajayaClientID, invoiceInfo.VoucherID),
-        .IssueDate = currentDateTime.ToString("yyyy-MM-dd"),
+        .IssueDate = invoiceInfo.VoucherDate.ToString("yyyy-MM-dd"),
         .InvoiceTypeCode = SharedHelper.GetInvoiceTypeCode(invoiceInfo.CatID),
         .InvoiceTypeName = If(isStandard, "0100000", "0200000"),
         .Note = invoiceInfo.Note,
@@ -15,7 +15,7 @@
         .TaxCurrencyCode = "SAR",
         .AdditionalDocumentReferenceID = "ICV",
         .AdditionalDocumentReferenceUUID = nextCounter.ToString(),
-        .IssueTime = currentDateTime.ToString("HH:mm:ss"),
+        .IssueTime = invoiceInfo.VoucherDate.ToString("HH:mm:ss"),
         .PIH = pih,
         .InvoiceDocumentReferenceID = SourceVoucherID
     }
@@ -70,9 +70,9 @@
     Public Shared Function MapToIncomeSourceInfoB(info As InvoiceInfo) As DeliveryAndPaymentMeansInfoB
         Return New DeliveryAndPaymentMeansInfoB With {
         .ActualDeliveryDate = info.ActualDeliveryDate.ToString("yyyy-MM-dd"),
-        .LatestDeliveryDate = info.LatestDeliveryDate.ToString("yyyy-MM-dd"),
+        .LatestDeliveryDate = info.ActualDeliveryDate.ToString("yyyy-MM-dd"),
         .PaymentMeansCode = info.PaymentMeansCode,
-        .Note = info.Note
+        .InstructionNote = info.InstructionNote
     }
     End Function
 #End Region

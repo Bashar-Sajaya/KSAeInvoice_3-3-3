@@ -1,4 +1,6 @@
-﻿Public Class ExtractUBle
+﻿Imports System.Security.Cryptography
+
+Public Class ExtractUBle
 
 #Region "SourceCreditorNotice"
     Public Shared Function SourceCreditorNotice(invoiceData As InvoiceData) As SourceItem
@@ -6,12 +8,54 @@
             Dim SourceFiscalYearID As Integer? = 0
             Dim SourceVoucherTypeID As Integer? = 0
             Dim SourceVoucherNo As Integer? = 0
-
+            Dim Note As String = ""
+            'اشعار عميل دائن
             If invoiceData?.InvoiceInfo?.ModuleID = 1 AndAlso invoiceData.InvoiceInfo.CatID2 = 6 Then
                 Dim SourceStr As String = invoiceData.Items(0).SourceStr
+                Dim des As String = invoiceData.InvoiceInfo.InstructionNote
 
                 If Not String.IsNullOrEmpty(SourceStr) Then
-                    Dim parts As String() = SourceStr.Split("-")
+
+
+                    ' تحقق إذا فيها فاصلة
+
+
+                    ' فك الأرقام من الجزء الأول
+                    Dim parts As String() = SourceStr.Split("-"c)
+
+                    If parts.Length >= 3 Then
+                        SourceFiscalYearID = If(String.IsNullOrEmpty(parts(0)), 0, Integer.Parse(parts(0)))
+                        SourceVoucherTypeID = If(String.IsNullOrEmpty(parts(1)), 0, Integer.Parse(parts(1)))
+                        SourceVoucherNo = If(String.IsNullOrEmpty(parts(2)), 0, Integer.Parse(parts(2)))
+                    Else
+                        SourceFiscalYearID = 0
+                        SourceVoucherTypeID = 0
+                        SourceVoucherNo = 0
+
+                    End If
+
+
+
+                End If
+
+                If Not String.IsNullOrEmpty(des) Then
+                    Note = des
+
+                End If
+
+
+
+                'اشعار عميل مدين
+            ElseIf invoiceData?.InvoiceInfo?.ModuleID = 1 AndAlso invoiceData.InvoiceInfo.CatID2 = 7 Then
+                Dim SourceStr As String = invoiceData.Items(0).SourceStr
+                Dim des As String = invoiceData.InvoiceInfo.InstructionNote
+
+                If Not String.IsNullOrEmpty(SourceStr) Then
+
+
+
+                    ' فك الأرقام من الجزء الأول
+                    Dim parts As String() = SourceStr.Split("-"c)
 
                     If parts.Length >= 3 Then
                         SourceFiscalYearID = If(String.IsNullOrEmpty(parts(0)), 0, Integer.Parse(parts(0)))
@@ -23,22 +67,49 @@
                         SourceVoucherNo = 0
                     End If
                 End If
-            ElseIf invoiceData?.InvoiceInfo?.ModuleID = 4 AndAlso invoiceData.InvoiceInfo.CatID2 = 10 Then
-                SourceFiscalYearID = invoiceData.Items(0).SourceFiscalYearID
-                SourceVoucherTypeID = invoiceData.Items(0).SourceVoucherTypeID
-                SourceVoucherNo = invoiceData.Items(0).SourceVoucherNo
+                If Not String.IsNullOrEmpty(des) Then
+                    Note = des
 
-                'Qaaaaaa
-            ElseIf invoiceData?.InvoiceInfo?.ModuleID = 10 AndAlso invoiceData.InvoiceInfo.CatID2 = 6 Then
+                End If
+
+
+
+                'مردت مبيعات
+            ElseIf invoiceData?.InvoiceInfo?.ModuleID = 4 AndAlso invoiceData.InvoiceInfo.CatID2 = 10 Then
+                Dim SourceStr As String = invoiceData.Items(0).SourceStr
                 SourceFiscalYearID = invoiceData.Items(0).SourceFiscalYearID
                 SourceVoucherTypeID = invoiceData.Items(0).SourceVoucherTypeID
                 SourceVoucherNo = invoiceData.Items(0).SourceVoucherNo
+                Dim SourceStra As String = invoiceData.Items(0).SourceStr
+                Dim des As String = invoiceData.InvoiceInfo.InstructionNote
+                If Not String.IsNullOrEmpty(des) Then
+                    Note = des
+
+                End If
+
+
+
+                'سند انسحاب مدارس
+            ElseIf invoiceData?.InvoiceInfo?.ModuleID = 10 AndAlso invoiceData.InvoiceInfo.CatID2 = 6 Then
+                Dim SourceStr As String = invoiceData.Items(0).SourceStr
+                SourceFiscalYearID = invoiceData.Items(0).SourceFiscalYearID
+                SourceVoucherTypeID = invoiceData.Items(0).SourceVoucherTypeID
+                SourceVoucherNo = invoiceData.Items(0).SourceVoucherNo
+                Dim SourceStra As String = invoiceData.Items(0).SourceStr
+                Dim des As String = invoiceData.InvoiceInfo.InstructionNote
+                If Not String.IsNullOrEmpty(des) Then
+                    Note = des
+
+                End If
+
+
             End If
 
             Dim SourceinvoiceData As New SourceItem() With {
             .SourceFiscalYearID = SourceFiscalYearID,
             .SourceVoucherTypeID = SourceVoucherTypeID,
-            .SourceVoucherNo = SourceVoucherNo
+            .SourceVoucherNo = SourceVoucherNo,
+            .InstructionNote = Note
         }
 
             Return SourceinvoiceData
@@ -47,7 +118,8 @@
             Dim SourceinvoiceData As New SourceItem() With {
             .SourceFiscalYearID = 0,
             .SourceVoucherTypeID = 0,
-            .SourceVoucherNo = 0
+            .SourceVoucherNo = 0,
+            .InstructionNote = ""
         }
             Return SourceinvoiceData
         End Try
