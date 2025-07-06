@@ -62,7 +62,6 @@ Public Class InvoiceInfo
     Public Property BuyerIsTaxable As Boolean
 
     '-------------------------------'
-    'Modify Ibrahim 
     Public Property CatID2 As Int32
 
     Public Property InstructionNote As String
@@ -84,7 +83,9 @@ Public Class ItemInfo
     Public Property TaxExemption As String
 
     '-------------------------------'
-    'Modify Ibrahim
+
+    Public Property taxCategoryID As String
+    Public Property TaxID As Integer?
 
     Public Property TotalRowDiscount As Decimal
 
@@ -116,8 +117,6 @@ Public Class ItemTaxGroupInfo
     Public Property TotalDiscount As Decimal
 
     '-------------------------------'
-    'Modify Ibrahim
-
     Public Property ID As Int32 = 1
 
     Public Property HeaderDisount As Decimal
@@ -129,7 +128,6 @@ End Class
 
 
 '-------------------------------'
-'Modify Ibrahim
 
 Public Structure SourceInvoiceInfo
     Public Property SourceVoucherID As String

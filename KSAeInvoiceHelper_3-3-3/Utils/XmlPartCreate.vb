@@ -462,7 +462,7 @@ Public Class XmlPartCreate
                 allowanceChargeElement.AppendChild(TaxCategory)
 
                 'Modify Ibrahim
-                If group.TaxType <> "Z" AndAlso group.TaxType <> "O" AndAlso group.TaxType <> "E" Then
+                If group.TaxType.ToUpper() <> "Z" AndAlso group.TaxType.ToUpper() <> "O" AndAlso group.TaxType.ToUpper() <> "E" Then
                     Dim taxCategoryIDElement As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
                     taxCategoryIDElement.SetAttribute("schemeAgencyID", "6")
                     taxCategoryIDElement.SetAttribute("schemeID", "UN/ECE 5305")
@@ -470,7 +470,7 @@ Public Class XmlPartCreate
                     TaxCategory.AppendChild(taxCategoryIDElement)
 
                     'Modify Ibrahim
-                ElseIf group.TaxType = "Z" OrElse group.TaxType = "O" OrElse group.TaxType = "E" Then
+                ElseIf group.TaxType.ToUpper() = "Z" OrElse group.TaxType.ToUpper() = "O" OrElse group.TaxType.ToUpper() = "E" Then
                     Dim result = SharedHelper.GetZeroTaxExemptionText(group.TaxExemption)
 
 
@@ -554,14 +554,15 @@ Public Class XmlPartCreate
             ' Handle Tax Exemptions
             ' Modify
 
-            If group.TaxType = "Z" OrElse group.TaxType = "O" OrElse group.TaxType = "E" Then
+            If group.TaxType.ToUpper() = "Z" OrElse group.TaxType.ToUpper() = "O" OrElse group.TaxType.ToUpper() = "E" Then
 
                 Dim result = SharedHelper.GetZeroTaxExemptionText(group.TaxExemption)
 
                 Dim taxCategoryID As XmlElement = xmlDoc.CreateElement("cbc:ID", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
                 taxCategoryID.SetAttribute("schemeAgencyID", "6")
                 taxCategoryID.SetAttribute("schemeID", "UN/ECE 5305")
-                taxCategoryID.InnerText = If(String.IsNullOrEmpty(result.TaxCode), "Z", result.TaxCode)
+                'taxCategoryID.InnerText = If(String.IsNullOrEmpty(result.TaxCode), "Z", result.TaxCode)
+                taxCategoryID.InnerText = result.TaxCode.ToString()
                 TaxCategorysub.AppendChild(taxCategoryID)
 
                 Dim taxCategoryPercent As XmlElement = xmlDoc.CreateElement("cbc:Percent", "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2")
@@ -664,7 +665,7 @@ Public Class XmlPartCreate
         invoiceElement.AppendChild(sellerElement)
 
         ' Determine tax exemptions
-        Dim Result As List(Of ItemTaxGroupInfo) = SharedHelper.GroupAndSumItems(invoiceData.Items)
+        Dim Result As List(Of ItemTaxGroupInfo) = SharedHelper.GroupAndSumItems(invoiceData.Items, invoiceData.InvoiceInfo)
         If Not invoiceData.InvoiceInfo.BuyerIsTaxable Then
             For Each item In Result
                 item.TaxType = "O"
@@ -693,50 +694,51 @@ Public Class XmlPartCreate
         invoiceElement = CreateAllowanceChargeElement(xmlDoc, LegalMonetaryTotal, invoiceElement, taxCatPercent, Result)
 
         ' Section (f)
-        'Modfiy Ibrahim
         Dim codeTax As List(Of String) = New List(Of String)()
-        For Each group As ItemTaxGroupInfo In Result
+        For Each group As ItemInfo In invoiceData.Items
 
-            'Modfiy Ibrahim
 
-            If group.TaxType = "Z" OrElse group.TaxType = "O" OrElse group.TaxType = "E" Then
+            Dim taxCategoryID As String
+            If Not group.TaxID.HasValue OrElse group.TaxID.Value = 0 OrElse Not invInfo.BuyerIsTaxable Then
+                taxCategoryID = "O"
+                group.TaxExemption = "VATEX-SA-OOS"
                 Dim ResultTaxcode = SharedHelper.GetZeroTaxExemptionText(group.TaxExemption)
-                codeTax.Add(ResultTaxcode.TaxCode)
 
+            ElseIf group.TaxPerc = 0.0 Then
+                Dim ResultTaxcode = SharedHelper.GetZeroTaxExemptionText(group.TaxExemption)
+                taxCategoryID = ResultTaxcode.TaxCode
             Else
-                codeTax.Add("1")
+
+                taxCategoryID = "S"
             End If
 
-        Next
-
-        'Modfiy Ibrahim
-        Dim Counter As Int32 = 0
-        For Each itemInfo As ItemInfo In invoiceData.Items
-
-            Dim taxCodeToUse As String
-
-            Dim invoiceLineInfo = MapToModels.MapToInvoiceLineInfoB(itemInfo, invInfo.BuyerIsTaxable)
-
-            If Counter < Result.Count Then
-                If codeTax Is Nothing AndAlso codeTax.Any() Then
-                    taxCodeToUse = invoiceLineInfo.TaxCategoryID
-
-
-                ElseIf codeTax(Counter) <> "1" AndAlso Counter < invoiceData.Items.Count Then
-                    taxCodeToUse = codeTax(Counter)
-
-                Else codeTax(Counter) = "1"
-                    taxCodeToUse = invoiceLineInfo.TaxCategoryID
-                End If
-            Else
-                taxCodeToUse = invoiceLineInfo.TaxCategoryID
-            End If
-
-            Dim invoiceLineElement As XmlElement = CreateInvoiceLineBElement(xmlDoc, invoiceLineInfo, taxCodeToUse)
+            Dim invoiceLineInfo = MapToModels.MapToInvoiceLineInfoB(group, taxCategoryID, invInfo.BuyerIsTaxable)
+            Dim invoiceLineElement As XmlElement = CreateInvoiceLineBElement(xmlDoc, invoiceLineInfo, taxCategoryID)
             invoiceElement.AppendChild(invoiceLineElement)
-            Counter += 1
         Next
-        ' Convert the XML to string and insert a newline after the XML declaration
+
+        'Modfiy 
+        'Dim Counter As Int32 = 0
+        'For Each itemInfo As ItemInfo In invoiceData.Items
+        '
+        '    Dim taxCodeToUse As String
+        '
+        '    Dim invoiceLineInfo = MapToModels.MapToInvoiceLineInfoB(itemInfo, invInfo.BuyerIsTaxable)
+        '
+        '    If Not codeTax.Any() Then
+        '        taxCodeToUse = invoiceLineInfo.TaxCategoryID
+        '    ElseIf codeTax(Counter) <> "1" AndAlso Counter < invoiceData.Items.Count Then
+        '        taxCodeToUse = codeTax(Counter)
+        '    ElseIf codeTax(Counter) = "1" Then
+        '        taxCodeToUse = invoiceLineInfo.TaxCategoryID
+        '    Else
+        '        taxCodeToUse = invoiceLineInfo.TaxCategoryID
+        '    End If
+        '    Dim invoiceLineElement As XmlElement = CreateInvoiceLineBElement(xmlDoc, invoiceLineInfo, taxCodeToUse)
+        '    invoiceElement.AppendChild(invoiceLineElement)
+        '    Counter += 1
+        'Next
+        '' Convert the XML to string and insert a newline after the XML declaration
 
 
 
@@ -755,7 +757,7 @@ Public Class XmlPartCreate
 
 #Region "UpdateVoucherData"
 
-    Shared Function UpdateVoucherData(fiscalYearId As Integer, voucherTypeId As Integer, voucherNo As Integer, newUUID As String, companyId As Integer, _clientConnectionString As String)
+    Shared Sub UpdateVoucherData(fiscalYearId As Integer, voucherTypeId As Integer, voucherNo As Integer, newUUID As String, companyId As Integer, _clientConnectionString As String)
         Using connection As New SqlConnection(_clientConnectionString)
             connection.Open()
 
@@ -769,7 +771,7 @@ Public Class XmlPartCreate
                 command.ExecuteNonQuery()
             End Using
         End Using
-    End Function
+    End Sub
 
 #End Region
 

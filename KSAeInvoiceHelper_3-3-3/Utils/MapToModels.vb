@@ -109,15 +109,7 @@
 #End Region
 
 #Region "MapToInvoiceLineInfoB"
-    Public Shared Function MapToInvoiceLineInfoB(item As ItemInfo, BuyerIsTaxable As Boolean) As InvoiceLineInfoB
-        Dim taxCategoryID As String
-        If Not BuyerIsTaxable Then
-            taxCategoryID = "O"
-        ElseIf item.TaxPerc = 0.0 Then
-            taxCategoryID = "Z"
-        Else
-            taxCategoryID = "S"
-        End If
+    Public Shared Function MapToInvoiceLineInfoB(item As ItemInfo, taxCategoryID As String, BuyerIsTaxable As Boolean) As InvoiceLineInfoB
 
         Return New InvoiceLineInfoB With {
         .ID = item.ItemCode,

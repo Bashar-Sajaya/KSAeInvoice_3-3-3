@@ -158,6 +158,7 @@ Public Class InvoiceHelpera
                             .TotalRowDiscount = Convert.ToDecimal(reader("TotalRowDiscount")), 'Modify 
                             .HeaderDisount = Convert.ToDecimal(reader("HeaderDisount")), 'Modify 
                             .TotalPriceAmountAfterDiscount = Convert.ToDecimal(reader("TotalPriceAmountAfterDiscount")),'Modify 
+                            .TaxID = If(reader("TaxID") Is DBNull.Value, 0, Convert.ToInt32(reader("TaxID"))),
                             .SourceFiscalYearID = If(IsDBNull(reader("SourceFiscalYearID")), 0, Convert.ToInt32(reader("SourceFiscalYearID"))),'Modify  
                             .SourceVoucherTypeID = If(IsDBNull(reader("SourceVoucherTypeID")), 0, Convert.ToInt32(reader("SourceVoucherTypeID"))),'Modify 
                             .SourceVoucherNo = If(IsDBNull(reader("SourceVoucherNo")), 0, Convert.ToInt32(reader("SourceVoucherNo"))),'Modify 
@@ -454,7 +455,7 @@ Public Class InvoiceHelpera
                 apiResponse.errorSource = -2
                 Throw New Exception("VoucherID is either missing or invalid.")
             End If
-            '
+            ' 
             ' ' Check if voucher ID already exists
             If VoucherIDExistsInDB(voucherId) Then
                 apiResponse.errorSource = -5

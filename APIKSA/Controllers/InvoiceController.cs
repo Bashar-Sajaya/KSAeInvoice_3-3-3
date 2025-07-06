@@ -29,7 +29,7 @@ namespace APIKSA.Controllers
 
             try
             {
-                string token = ExtractAuthorizationToken();
+                string token = ExtractAuthorizationToken();   
                 string clientConnectionString = await GetValidatedConnectionStringAsync(input.SubSajayaClientID, input.Username, token);
                 string commonConnectionString = UpdateInitialCatalogToTdCommon(clientConnectionString);
 
@@ -63,10 +63,10 @@ namespace APIKSA.Controllers
             try
             {
                 string token = ExtractAuthorizationToken();
-                string clientConnectionString = await GetValidatedConnectionStringAsync(input.SubSajayaClientID, input.Username, token);
-                string commonConnectionString = UpdateInitialCatalogToTdCommon(clientConnectionString);
-
-                var reportInvoiceResult = await ReportInvoiceAsync(input, clientConnectionString, commonConnectionString);
+                 string clientConnectionString = await GetValidatedConnectionStringAsync(input.SubSajayaClientID, input.Username, token);
+                 string commonConnectionString = UpdateInitialCatalogToTdCommon(clientConnectionString);
+                
+                 var reportInvoiceResult = await ReportInvoiceAsync(input, clientConnectionString, commonConnectionString);
 
                 reportInvoiceResult.isRejected = !reportInvoiceResult.success;
                 reportInvoiceResult.status = reportInvoiceResult.success ? "1" : "0";

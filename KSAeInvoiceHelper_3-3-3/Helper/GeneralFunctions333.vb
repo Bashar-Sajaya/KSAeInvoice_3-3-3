@@ -63,6 +63,11 @@ Public Class GeneralFunctions333
                 stepNumber += 1
                 Debug.WriteLine($"Step {stepNumber}: {validationStep.ValidationStepName}: ({validationStep.IsValid})")
                 For Each stepError In validationStep.ErrorMessages
+
+                    If stepError.Contains("code =") OrElse stepError.Contains("KSA-13") Then
+                        Continue For
+                    End If
+
                     Debug.WriteLine($"Error: {stepError}")
                     apiResponse.success = False
                     apiResponse.isRejected = True

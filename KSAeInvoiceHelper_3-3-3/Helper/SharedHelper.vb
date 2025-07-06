@@ -240,16 +240,33 @@ Public Class SharedHelper
 #End Region
 
 #Region "GroupAndSumItems"
-    Public Shared Function GroupAndSumItems(items As List(Of ItemInfo)) As List(Of ItemTaxGroupInfo)
-            For Each itemInfo As ItemInfo In items
-                Debug.WriteLine($"Item Code: {itemInfo.ItemCode}, Description: {itemInfo.ItemDesc}, Quantity: {itemInfo.Qty}, Unit Price: {itemInfo.ItemPriceLC}, Total Discount: {itemInfo.TotalDiscountLC}, Tax Amount: {itemInfo.TaxAmount}, Total Price: {itemInfo.TotalPriceLC}, Tax Percent: {itemInfo.TaxPerc}, Total Price After Tax: {itemInfo.ItemTotalPriceAfterTax}, Tax Exemption: {itemInfo.TaxExemption} ,Header Disount: {itemInfo.HeaderDisount}")
-            Next
+    Public Shared Function GroupAndSumItems(items As List(Of ItemInfo), totalInfo As InvoiceInfo) As List(Of ItemTaxGroupInfo)
+        For Each itemInfo As ItemInfo In items
+            Debug.WriteLine($"Item Code: {itemInfo.ItemCode}, Description: {itemInfo.ItemDesc}, Quantity: {itemInfo.Qty}, Unit Price: {itemInfo.ItemPriceLC}, Total Discount: {itemInfo.TotalDiscountLC}, Tax Amount: {itemInfo.TaxAmount}, Total Price: {itemInfo.TotalPriceLC}, Tax Percent: {itemInfo.TaxPerc}, Total Price After Tax: {itemInfo.ItemTotalPriceAfterTax}, Tax Exemption: {itemInfo.TaxExemption} ,Header Disount: {itemInfo.HeaderDisount}")
 
-            Dim Count As Int16 = 0
 
-            Dim result As List(Of ItemTaxGroupInfo) = (
-        From item In items
-        Group item By item.TaxPerc, item.TaxExemption Into Group
+            Dim taxCategoryID As String
+            If Not itemInfo.TaxID.HasValue OrElse itemInfo.TaxID.Value = 0 OrElse Not totalInfo.BuyerIsTaxable Then
+                taxCategoryID = "O"
+                itemInfo.TaxExemption = "VATEX-SA-OOS"
+                Dim ResultTaxcode = SharedHelper.GetZeroTaxExemptionText(itemInfo.TaxExemption)
+
+            ElseIf itemInfo.TaxPerc = 0.0 Then
+                Dim ResultTaxcode = SharedHelper.GetZeroTaxExemptionText(itemInfo.TaxExemption)
+                taxCategoryID = ResultTaxcode.TaxCode
+            Else
+
+                taxCategoryID = "S"
+            End If
+            itemInfo.taxCategoryID = taxCategoryID
+
+        Next
+        Dim items2 As List(Of ItemInfo) = items
+        Dim Count As Int16 = 0
+
+        Dim result As List(Of ItemTaxGroupInfo) = (
+        From item In items2
+        Group item By item.TaxPerc, item.TaxExemption, item.taxCategoryID Into Group
         Select New ItemTaxGroupInfo With {
             .TaxPercent = TaxPerc,
             .TaxExemption = TaxExemption,
@@ -259,25 +276,25 @@ Public Class SharedHelper
             .TotalPriceAfterTax = Group.Sum(Function(i) i.ItemTotalPriceAfterTax),
             .TotalDiscount = Group.Sum(Function(i) i.TotalDiscountLC),
             .HeaderDisount = Group.Sum(Function(i) i.HeaderDisount), ' modify
-            .TaxType = If(TaxPerc = 0.0, "Z", "S")
+            .TaxType = taxCategoryID
         }
     ).ToList()
+        '.TaxType = If(TaxPerc = 0.0, "Z", "S")
+        For Each group As ItemTaxGroupInfo In result
+            group.TaxAmount = group.TaxAmount
+            group.TotalPrice = group.TotalPrice
+            group.TotalPriceAmountAfterDiscount = group.TotalPriceAmountAfterDiscount
+            group.TotalPriceAfterTax = group.TotalPriceAfterTax
+            group.TotalDiscount = group.TotalDiscount
+            group.HeaderDisount = group.HeaderDisount ' modify
+            group.ID = Count + 1 'Modfiy 
+            Count += 1
 
-            For Each group As ItemTaxGroupInfo In result
-                group.TaxAmount = group.TaxAmount
-                group.TotalPrice = group.TotalPrice
-                group.TotalPriceAmountAfterDiscount = group.TotalPriceAmountAfterDiscount
-                group.TotalPriceAfterTax = group.TotalPriceAfterTax
-                group.TotalDiscount = group.TotalDiscount
-                group.HeaderDisount = group.HeaderDisount ' modify
-                group.ID = Count + 1 'Modfiy 
-                Count += 1
+            Debug.WriteLine($">>>>> Group: Tax Percent: {group.TaxPercent}, Tax Exemption: {group.TaxExemption}, Total Tax: {group.TaxAmount}, Total Price: {group.TotalPrice}, Total Price After Tax: {group.TotalPriceAfterTax}, Discount: {group.TotalDiscount} ,Header Disount: {group.HeaderDisount}")
+        Next
 
-                Debug.WriteLine($">>>>> Group: Tax Percent: {group.TaxPercent}, Tax Exemption: {group.TaxExemption}, Total Tax: {group.TaxAmount}, Total Price: {group.TotalPrice}, Total Price After Tax: {group.TotalPriceAfterTax}, Discount: {group.TotalDiscount} ,Header Disount: {group.HeaderDisount}")
-            Next
-
-            Return result
-        End Function
+        Return result
+    End Function
 
 #End Region
 
